@@ -1,0 +1,129 @@
+# GitLab Enterprise Edition Configuration Template
+# This file contains the service definition for GitLab EE
+
+gitlab:
+  image: gitlab/gitlab-ee:latest
+  hostname: gitlab.{{ domain }}
+  container_name: gitlab
+  restart: unless-stopped
+  
+  environment:
+    # GitLab Configuration
+    GITLAB_OMNIBUS_CONFIG: |
+      external_url 'https://gitlab.{{ domain }}'
+      
+      # PostgreSQL Configuration
+      postgresql['enable'] = true
+      postgresql['shared_buffers'] = "512MB"
+      postgresql['max_connections'] = 200
+      postgresql['work_mem'] = "8MB"
+      
+      # Redis Configuration  
+      redis['enable'] = true
+      redis['maxmemory'] = "512mb"
+      redis['maxmemory_policy'] = "allkeys-lru"
+      
+      # Container Registry
+      registry_external_url 'https://registry.{{ domain }}'
+      registry['enable'] = true
+      registry_nginx['enable'] = true
+      registry_nginx['listen_port'] = 5050
+      
+      # GitLab Pages
+      pages_external_url 'https://pages.{{ domain }}'
+      gitlab_pages['enable'] = true
+      
+      # Monitoring
+      prometheus['enable'] = true
+      prometheus['listen_address'] = '0.0.0.0:9090'
+      
+      # Security
+      nginx['ssl_certificate'] = "/etc/ssl/certs/gitlab.crt"
+      nginx['ssl_certificate_key'] = "/etc/ssl/private/gitlab.key"
+      
+      # LDAP Integration (if enabled)
+      {% if ldap_enabled %}
+      gitlab_rails['ldap_enabled'] = true
+      gitlab_rails['ldap_servers'] = YAML.load <<-'EOS'
+        main:
+          label: 'LDAP'
+          host: '{{ ldap_host }}'
+          port: {{ ldap_port }}
+          uid: '{{ ldap_uid }}'
+          bind_dn: '{{ ldap_bind_dn }}'
+          password: '{{ ldap_password }}'
+          encryption: '{{ ldap_encryption }}'
+          base: '{{ ldap_base }}'
+      EOS
+      {% endif %}
+  
+  ports:
+    - "80:80"
+    - "443:443"
+    - "22:22"
+    - "5050:5050"
+  
+  volumes:
+    - gitlab_config:/etc/gitlab
+    - gitlab_logs:/var/log/gitlab
+    - gitlab_data:/var/opt/gitlab
+    - ./ssl:/etc/ssl
+  
+  networks:
+    - internal
+    - public
+  
+  labels:
+    # Traefik Configuration
+    - "traefik.enable=true"
+    - "traefik.docker.network=public"
+    
+    # HTTP Service
+    - "traefik.http.services.gitlab.loadbalancer.server.port=80"
+    
+    # Main GitLab Route
+    - "traefik.http.routers.gitlab.rule=Host(`gitlab.{{ domain }}`)"
+    - "traefik.http.routers.gitlab.entrypoints=websecure"
+    - "traefik.http.routers.gitlab.tls.certresolver=letsencrypt"
+    
+    # Container Registry Route
+    - "traefik.http.routers.registry.rule=Host(`registry.{{ domain }}`)"
+    - "traefik.http.routers.registry.entrypoints=websecure"
+    - "traefik.http.routers.registry.tls.certresolver=letsencrypt"
+    - "traefik.http.routers.registry.service=gitlab-registry"
+    - "traefik.http.services.gitlab-registry.loadbalancer.server.port=5050"
+
+# GitLab Runner Service
+gitlab-runner:
+  image: gitlab/gitlab-runner:latest
+  container_name: gitlab-runner
+  restart: unless-stopped
+  
+  environment:
+    - CI_SERVER_URL=https://gitlab.{{ domain }}/
+  
+  volumes:
+    - gitlab_runner_config:/etc/gitlab-runner
+    - /var/run/docker.sock:/var/run/docker.sock:ro
+  
+  networks:
+    - internal
+  
+  labels:
+    - "traefik.enable=false"
+
+volumes:
+  gitlab_config:
+    driver: local
+  gitlab_logs:
+    driver: local  
+  gitlab_data:
+    driver: local
+  gitlab_runner_config:
+    driver: local
+
+networks:
+  internal:
+    external: true
+  public:
+    external: true

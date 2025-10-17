@@ -1,0 +1,82 @@
+[build-system]
+requires = ["setuptools>=61.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "labctl"
+version = "2.0.0"
+description = "Enterprise Home Lab Infrastructure Management CLI"
+readme = "README.md"
+authors = [
+    {name = "Home Lab Community", email = "support@homelab.community"},
+]
+license = {text = "MIT"}
+requires-python = ">=3.11"
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: System Administrators",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: System :: Systems Administration",
+    "Topic :: Software Development :: Libraries :: Python Modules",
+]
+keywords = ["docker", "compose", "infrastructure", "monitoring", "security", "devops"]
+
+dependencies = [
+    "typer[all]>=0.9.0",
+    "rich>=13.0.0",
+    "pydantic>=2.0.0",
+    "pyyaml>=6.0.0",
+    "jinja2>=3.0.0",
+    "requests>=2.31.0",
+    "click>=8.0.0",
+    "python-dotenv>=1.0.0",
+    "cryptography>=41.0.0",
+    "jsonschema>=4.17.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.0.0",
+    "pytest-cov>=4.0.0",
+    "black>=23.0.0",
+    "isort>=5.12.0",
+    "flake8>=6.0.0",
+    "mypy>=1.0.0",
+    "pre-commit>=3.0.0",
+]
+
+[project.urls]
+Homepage = "https://github.com/patel5d2/enterprise-homelab-boilerplate"
+Documentation = "https://github.com/patel5d2/enterprise-homelab-boilerplate#readme"
+Repository = "https://github.com/patel5d2/enterprise-homelab-boilerplate.git"
+Issues = "https://github.com/patel5d2/enterprise-homelab-boilerplate/issues"
+
+[project.scripts]
+labctl = "labctl.cli.main:app"
+
+[tool.setuptools]
+package-dir = {"" = "cli"}
+
+[tool.setuptools.packages.find]
+where = ["cli"]
+
+[tool.black]
+line-length = 88
+target-version = ['py311']
+include = '\.pyi?$'
+
+[tool.isort]
+profile = "black"
+multi_line_output = 3
+line_length = 88
+
+[tool.mypy]
+python_version = "3.11"
+warn_return_any = true
+warn_unused_configs = true
+disallow_untyped_defs = true
+disallow_incomplete_defs = true
