@@ -1,0 +1,68 @@
+# Enterprise Home Lab Configuration Example
+# Copy this file to config.yaml and customize for your environment
+
+core:
+  # Your primary domain - all services will use subdomains of this
+  domain: "homelab.example.com"
+  
+  # Admin email for Let's Encrypt certificates and notifications
+  email: "admin@example.com"
+  
+  # System timezone
+  timezone: "America/New_York"
+
+reverse_proxy:
+  # Reverse proxy provider: traefik, caddy, nginx
+  provider: "traefik"
+  
+  # SSL certificate provider
+  ssl_provider: "letsencrypt"
+  
+  # Use Let's Encrypt staging (for testing)
+  staging: false
+
+monitoring:
+  # Enable monitoring stack (Prometheus, Grafana, Loki, AlertManager)
+  enabled: true
+  
+  # Metrics retention period
+  retention: "30d"
+  
+  # Prometheus port (internal)
+  prometheus_port: 9090
+  
+  # Grafana port (internal)
+  grafana_port: 3000
+
+gitlab:
+  # Enable GitLab Enterprise Edition
+  enabled: true
+  
+  # Number of GitLab runners
+  runners: 3
+  
+  # Enable container registry
+  registry: true
+  
+  # Enable GitLab Pages
+  pages: true
+
+security:
+  # Enable security features (scanning, monitoring)
+  enabled: true
+  
+  # Enable vulnerability scanning
+  vulnerability_scanning: true
+  
+  # Enable compliance reporting
+  compliance_reporting: true
+
+vault:
+  # Enable HashiCorp Vault
+  enabled: false
+  
+  # Enable auto-unseal (dev mode)
+  auto_unseal: true
+  
+  # Enable Vault UI
+  ui_enabled: true

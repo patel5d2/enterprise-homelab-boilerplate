@@ -17,6 +17,12 @@ from ..core.exceptions import HomeLabError
 from .commands import (
     init_cmd,
     validate_cmd,
+    build_cmd,
+    deploy_cmd,
+    status_cmd,
+    logs_cmd,
+    stop_cmd,
+    config_cmd,
 )
 
 # Initialize Typer app
@@ -147,37 +153,255 @@ def validate_command(
 @app.command("build")
 def build_command(
     config_file: str = config_file_option,
+    services: Optional[str] = typer.Option(
+        None,
+        "--services",
+        help="Comma-separated list of services to build",
+    ),
+    output: Optional[str] = typer.Option(
+        None,
+        "--output",
+        "-o",
+        help="Output directory for compose files",
+    ),
+    force: bool = typer.Option(
+        False,
+        "--force",
+        help="Overwrite existing files",
+    ),
 ) -> None:
     """
     🔨 Build Docker Compose configurations
     
     Generate Docker Compose files from configuration.
     """
-    console.print("[yellow]Build command not yet implemented[/yellow]")
+    try:
+        service_list = services.split(',') if services else None
+        build_cmd.run(
+            config_file=config_file,
+            services=service_list,
+            output_dir=output,
+            force=force,
+        )
+    except HomeLabError as e:
+        console.print(f"[red]Build failed:[/red] {e.message}", err=True)
+        raise typer.Exit(1)
 
 
 @app.command("deploy") 
 def deploy_command(
     config_file: str = config_file_option,
+    services: Optional[str] = typer.Option(
+        None,
+        "--services",
+        help="Comma-separated list of services to deploy",
+    ),
+    compose_dir: Optional[str] = typer.Option(
+        None,
+        "--compose-dir",
+        help="Directory containing compose files",
+    ),
+    build: bool = typer.Option(
+        False,
+        "--build",
+        help="Build compose files before deployment",
+    ),
+    wait: bool = typer.Option(
+        True,
+        "--wait/--no-wait",
+        help="Wait for services to be healthy",
+    ),
+    timeout: int = typer.Option(
+        300,
+        "--timeout",
+        help="Timeout for waiting (seconds)",
+    ),
 ) -> None:
     """
     🚀 Deploy home lab services
     
     Deploy services using Docker Compose with health checking.
     """
-    console.print("[yellow]Deploy command not yet implemented[/yellow]")
+    try:
+        service_list = services.split(',') if services else None
+        deploy_cmd.run(
+            config_file=config_file,
+            services=service_list,
+            compose_dir=compose_dir,
+            build=build,
+            wait=wait,
+            timeout=timeout,
+        )
+    except HomeLabError as e:
+        console.print(f"[red]Deployment failed:[/red] {e.message}", err=True)
+        raise typer.Exit(1)
 
 
 @app.command("status")
 def status_command(
     config_file: str = config_file_option,
+    services: Optional[str] = typer.Option(
+        None,
+        "--services",
+        help="Comma-separated list of services to check",
+    ),
+    compose_dir: Optional[str] = typer.Option(
+        None,
+        "--compose-dir",
+        help="Directory containing compose files",
+    ),
+    watch: bool = typer.Option(
+        False,
+        "--watch",
+        "-w",
+        help="Watch status continuously (not yet implemented)",
+    ),
 ) -> None:
     """
     📊 Show service status and health
     
-    Displays current status of all services.
+    Displays current status of all services or specific services.
     """
-    console.print("[yellow]Status command not yet implemented[/yellow]")
+    try:
+        service_list = services.split(',') if services else None
+        status_cmd.run(
+            config_file=config_file,
+            services=service_list,
+            compose_dir=compose_dir,
+            watch=watch,
+        )
+    except HomeLabError as e:
+        console.print(f"[red]Error:[/red] {e.message}", err=True)
+        raise typer.Exit(1)
+
+
+@app.command("logs")
+def logs_command(
+    config_file: str = config_file_option,
+    services: Optional[str] = typer.Option(
+        None,
+        "--services",
+        help="Comma-separated list of services to show logs for",
+    ),
+    compose_dir: Optional[str] = typer.Option(
+        None,
+        "--compose-dir",
+        help="Directory containing compose files",
+    ),
+    follow: bool = typer.Option(
+        False,
+        "--follow",
+        "-f",
+        help="Follow log output",
+    ),
+    tail: int = typer.Option(
+        100,
+        "--tail",
+        help="Number of lines to show",
+    ),
+) -> None:
+    """
+    📋 Show service logs
+    
+    Display logs from services with filtering and follow options.
+    """
+    try:
+        service_list = services.split(',') if services else None
+        logs_cmd.run(
+            config_file=config_file,
+            services=service_list,
+            compose_dir=compose_dir,
+            follow=follow,
+            tail=tail,
+        )
+    except HomeLabError as e:
+        console.print(f"[red]Error:[/red] {e.message}", err=True)
+        raise typer.Exit(1)
+
+
+@app.command("stop")
+def stop_command(
+    config_file: str = config_file_option,
+    services: Optional[str] = typer.Option(
+        None,
+        "--services",
+        help="Comma-separated list of services to stop",
+    ),
+    compose_dir: Optional[str] = typer.Option(
+        None,
+        "--compose-dir",
+        help="Directory containing compose files",
+    ),
+    volumes: bool = typer.Option(
+        False,
+        "--volumes",
+        help="Remove volumes as well",
+    ),
+    images: bool = typer.Option(
+        False,
+        "--images",
+        help="Remove unused images after stopping",
+    ),
+) -> None:
+    """
+    🛑 Stop services and cleanup resources
+    
+    Stop running services and optionally cleanup volumes and images.
+    """
+    try:
+        service_list = services.split(',') if services else None
+        stop_cmd.run(
+            config_file=config_file,
+            services=service_list,
+            compose_dir=compose_dir,
+            remove_volumes=volumes,
+            remove_images=images,
+        )
+    except HomeLabError as e:
+        console.print(f"[red]Stop failed:[/red] {e.message}", err=True)
+        raise typer.Exit(1)
+
+
+@app.command("config")
+def config_command(
+    config_file: str = config_file_option,
+    show: bool = typer.Option(
+        False,
+        "--show",
+        help="Show configuration content",
+    ),
+    edit: bool = typer.Option(
+        False,
+        "--edit",
+        help="Open configuration in editor",
+    ),
+    key: Optional[str] = typer.Option(
+        None,
+        "--key",
+        help="Show specific configuration key",
+    ),
+    format: str = typer.Option(
+        "yaml",
+        "--format",
+        help="Output format (yaml, json)",
+    ),
+) -> None:
+    """
+    ⚙️ Manage configuration files
+    
+    View, edit, and manage configuration files.
+    """
+    try:
+        config_cmd.run(
+            config_file=config_file,
+            show=show,
+            edit=edit,
+            key=key,
+            format=format,
+        )
+    except HomeLabError as e:
+        console.print(f"[red]Error:[/red] {e.message}", err=True)
+        raise typer.Exit(1)
 
 
 @app.command("version")
