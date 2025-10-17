@@ -1,0 +1,145 @@
+# PostgreSQL Database Service Configuration
+# Enterprise-grade relational database
+
+service_name: "postgresql"
+display_name: "PostgreSQL Database"
+category: "core_infrastructure"
+description: "Enterprise-grade relational database with high performance and reliability"
+required: false
+default_enabled: true
+
+# Docker configuration
+docker:
+  image: "postgres:16"
+  container_name: "postgres"
+  restart: "unless-stopped"
+  
+  ports:
+    - "5432:5432"
+  
+  volumes:
+    - "postgres-data:/var/lib/postgresql/data"
+    - "postgres-backups:/backups"
+  
+  networks:
+    - "traefik"
+  
+  environment:
+    - "POSTGRES_DB=${POSTGRES_DB}"
+    - "POSTGRES_USER=${POSTGRES_USER}"
+    - "POSTGRES_PASSWORD=${POSTGRES_PASSWORD}"
+    - "POSTGRES_INITDB_ARGS=--encoding=UTF-8 --lc-collate=C --lc-ctype=C"
+    - "TZ=${TIMEZONE}"
+
+# Configuration options
+configuration:
+  database:
+    name:
+      type: "string"
+      default: "homelab"
+      description: "Default database name"
+    
+    user:
+      type: "string"
+      default: "postgres"
+      description: "Database superuser name"
+    
+    password:
+      type: "password"
+      required: true
+      description: "Database superuser password"
+  
+  performance:
+    max_connections:
+      type: "integer"
+      default: 100
+      description: "Maximum number of database connections"
+    
+    shared_buffers:
+      type: "string"
+      default: "256MB"
+      description: "Amount of memory for shared buffers"
+    
+    work_mem:
+      type: "string"
+      default: "4MB"
+      description: "Memory per query operation"
+  
+  backup:
+    enabled:
+      type: "boolean"
+      default: true
+      description: "Enable automated backups"
+    
+    schedule:
+      type: "string"
+      default: "0 2 * * *"
+      description: "Backup schedule (cron format)"
+    
+    retention_days:
+      type: "integer"
+      default: 30
+      description: "Number of days to keep backups"
+    
+    compress:
+      type: "boolean"
+      default: true
+      description: "Compress backup files"
+
+# Health check
+healthcheck:
+  test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+  interval: "30s"
+  timeout: "10s"
+  retries: 3
+
+# Dependencies
+dependencies: []
+
+# Storage volumes
+volumes:
+  - name: "postgres-data"
+    description: "PostgreSQL database files"
+  - name: "postgres-backups"
+    description: "Database backup storage"
+
+# Environment variables
+environment_variables:
+  - name: "POSTGRES_DB"
+    description: "Default database name"
+    default: "homelab"
+  
+  - name: "POSTGRES_USER"
+    description: "Database superuser"
+    default: "postgres"
+  
+  - name: "POSTGRES_PASSWORD"
+    description: "Database password"
+    generated: true
+    type: "password"
+
+# Additional services (backup)
+additional_services:
+  postgres_backup:
+    enabled_when: "backup.enabled"
+    docker:
+      image: "postgres:16"
+      container_name: "postgres-backup"
+      restart: "unless-stopped"
+      
+      volumes:
+        - "postgres-backups:/backups"
+      
+      networks:
+        - "traefik"
+      
+      environment:
+        - "PGPASSWORD=${POSTGRES_PASSWORD}"
+        - "POSTGRES_HOST=postgres"
+        - "POSTGRES_DB=${POSTGRES_DB}"
+        - "POSTGRES_USER=${POSTGRES_USER}"
+        - "BACKUP_SCHEDULE=${BACKUP_SCHEDULE}"
+        - "BACKUP_RETENTION=${BACKUP_RETENTION_DAYS}"
+      
+      command: |
+        sh -c 'echo "${BACKUP_SCHEDULE} pg_dump -h $$POSTGRES_HOST -U $$POSTGRES_USER $$POSTGRES_DB | gzip > /backups/backup_$$(date +%Y%m%d_%H%M%S).sql.gz" | crontab - && crond -f'

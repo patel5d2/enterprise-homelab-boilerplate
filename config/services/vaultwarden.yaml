@@ -1,0 +1,172 @@
+# Vaultwarden Password Manager Service Configuration
+# Self-hosted Bitwarden-compatible password manager
+
+service_name: "vaultwarden"
+display_name: "Vaultwarden"
+category: "security"
+description: "Self-hosted Bitwarden-compatible password manager"
+required: false
+default_enabled: false
+
+# Docker configuration
+docker:
+  image: "vaultwarden/server:latest"
+  container_name: "vaultwarden"
+  restart: "unless-stopped"
+  
+  ports:
+    - "8080:80"
+  
+  volumes:
+    - "vaultwarden-data:/data"
+  
+  networks:
+    - "traefik"
+  
+  environment:
+    - "DOMAIN=https://vault.${DOMAIN}"
+    - "ADMIN_TOKEN=${ADMIN_TOKEN}"
+    - "SIGNUPS_ALLOWED=${SIGNUPS_ALLOWED}"
+    - "INVITATIONS_ALLOWED=${INVITATIONS_ALLOWED}"
+    - "WEB_VAULT_ENABLED=${WEB_VAULT_ENABLED}"
+    - "WEBSOCKET_ENABLED=true"
+    - "WEBSOCKET_ADDRESS=0.0.0.0"
+    - "WEBSOCKET_PORT=3012"
+    - "SMTP_HOST=${SMTP_HOST}"
+    - "SMTP_FROM=${SMTP_FROM}"
+    - "SMTP_PORT=${SMTP_PORT}"
+    - "SMTP_SECURITY=${SMTP_SECURITY}"
+    - "SMTP_USERNAME=${SMTP_USERNAME}"
+    - "SMTP_PASSWORD=${SMTP_PASSWORD}"
+    - "TZ=${TIMEZONE}"
+  
+  labels:
+    - "traefik.enable=true"
+    - "traefik.http.routers.vaultwarden.rule=Host(`vault.${DOMAIN}`)"
+    - "traefik.http.routers.vaultwarden.tls.certresolver=letsencrypt"
+    - "traefik.http.services.vaultwarden.loadbalancer.server.port=80"
+
+# Configuration options
+configuration:
+  web:
+    subdomain:
+      type: "string"
+      default: "vault"
+      description: "Subdomain for web interface"
+  
+  admin:
+    admin_token:
+      type: "password"
+      required: true
+      description: "Admin panel access token"
+    
+    web_vault_enabled:
+      type: "boolean"
+      default: true
+      description: "Enable web vault interface"
+  
+  registration:
+    signups_allowed:
+      type: "boolean"
+      default: false
+      description: "Allow new user registrations"
+    
+    invitations_allowed:
+      type: "boolean"
+      default: true
+      description: "Allow admin to send invitations"
+  
+  email:
+    smtp_host:
+      type: "string"
+      default: ""
+      description: "SMTP server hostname"
+    
+    smtp_port:
+      type: "integer"
+      default: 587
+      description: "SMTP server port"
+    
+    smtp_from:
+      type: "string"
+      default: "admin@${DOMAIN}"
+      description: "From email address"
+    
+    smtp_username:
+      type: "string"
+      default: ""
+      description: "SMTP username"
+    
+    smtp_password:
+      type: "password"
+      default: ""
+      description: "SMTP password"
+    
+    smtp_security:
+      type: "choice"
+      choices: ["starttls", "force_tls", "off"]
+      default: "starttls"
+      description: "SMTP security method"
+
+# Health check
+healthcheck:
+  test: ["CMD", "curl", "-f", "http://localhost/alive"]
+  interval: "30s"
+  timeout: "10s"
+  retries: 3
+
+# Dependencies
+dependencies: []
+
+# URLs generated for this service
+urls:
+  web: "https://vault.${DOMAIN}"
+  admin: "https://vault.${DOMAIN}/admin"
+
+# Storage volumes
+volumes:
+  - name: "vaultwarden-data"
+    description: "Vaultwarden database and attachments"
+
+# Environment variables
+environment_variables:
+  - name: "ADMIN_TOKEN"
+    description: "Admin panel access token"
+    generated: true
+    type: "password"
+  
+  - name: "SIGNUPS_ALLOWED"
+    description: "Allow new registrations"
+    default: "false"
+  
+  - name: "INVITATIONS_ALLOWED"
+    description: "Allow invitations"
+    default: "true"
+  
+  - name: "WEB_VAULT_ENABLED"
+    description: "Enable web vault"
+    default: "true"
+  
+  - name: "SMTP_HOST"
+    description: "SMTP hostname"
+    default: ""
+  
+  - name: "SMTP_PORT"
+    description: "SMTP port"
+    default: "587"
+  
+  - name: "SMTP_FROM"
+    description: "From email"
+    default: "admin@${DOMAIN}"
+  
+  - name: "SMTP_USERNAME"
+    description: "SMTP username"
+    default: ""
+  
+  - name: "SMTP_PASSWORD"
+    description: "SMTP password"
+    default: ""
+  
+  - name: "SMTP_SECURITY"
+    description: "SMTP security"
+    default: "starttls"

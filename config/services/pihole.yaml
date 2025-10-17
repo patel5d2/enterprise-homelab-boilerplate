@@ -1,0 +1,185 @@
+# Pi-hole DNS Service Configuration
+# Network-wide ad blocking and DNS management
+
+service_name: "pihole"
+display_name: "Pi-hole"
+category: "networking"
+description: "Network-wide ad blocking and local DNS server"
+required: false
+default_enabled: false
+
+# Docker configuration
+docker:
+  image: "pihole/pihole:latest"
+  container_name: "pihole"
+  restart: "unless-stopped"
+  
+  ports:
+    - "53:53/tcp"
+    - "53:53/udp"
+    - "67:67/udp"
+    - "80:80/tcp"
+  
+  volumes:
+    - "pihole-data:/etc/pihole"
+    - "pihole-dnsmasq:/etc/dnsmasq.d"
+  
+  networks:
+    - "traefik"
+  
+  environment:
+    - "WEBPASSWORD=${PIHOLE_PASSWORD}"
+    - "TZ=${TIMEZONE}"
+    - "DNS1=${PRIMARY_DNS}"
+    - "DNS2=${SECONDARY_DNS}"
+    - "DNSMASQ_LISTENING=all"
+    - "WEB_PORT=80"
+    - "VIRTUAL_HOST=pihole.${DOMAIN}"
+    - "PROXY_LOCATION=pihole"
+    - "FTLCONF_LOCAL_IPV4=${SERVER_IP}"
+  
+  labels:
+    - "traefik.enable=true"
+    - "traefik.http.routers.pihole.rule=Host(`pihole.${DOMAIN}`)"
+    - "traefik.http.routers.pihole.tls.certresolver=letsencrypt"
+    - "traefik.http.services.pihole.loadbalancer.server.port=80"
+  
+  cap_add:
+    - "NET_ADMIN"
+  
+  dns:
+    - "127.0.0.1"
+    - "${PRIMARY_DNS}"
+
+# Configuration options
+configuration:
+  web:
+    subdomain:
+      type: "string"
+      default: "pihole"
+      description: "Subdomain for web interface"
+    
+    password:
+      type: "password"
+      required: true
+      description: "Admin web interface password"
+  
+  dns:
+    primary_dns:
+      type: "choice"
+      choices: ["1.1.1.1", "8.8.8.8", "9.9.9.9", "208.67.222.222"]
+      default: "1.1.1.1"
+      description: "Primary upstream DNS server"
+    
+    secondary_dns:
+      type: "choice"
+      choices: ["1.0.0.1", "8.8.4.4", "149.112.112.112", "208.67.220.220"]
+      default: "1.0.0.1"
+      description: "Secondary upstream DNS server"
+  
+  network:
+    server_ip:
+      type: "string"
+      required: true
+      description: "Server IP address for Pi-hole"
+    
+    dhcp_enabled:
+      type: "boolean"
+      default: false
+      description: "Enable DHCP server functionality"
+    
+    dhcp_start:
+      type: "string"
+      default: "192.168.1.100"
+      description: "DHCP range start IP (if DHCP enabled)"
+    
+    dhcp_end:
+      type: "string"
+      default: "192.168.1.200"
+      description: "DHCP range end IP (if DHCP enabled)"
+  
+  blocking:
+    default_blocklists:
+      type: "multiselect"
+      choices:
+        - "StevenBlack Unified"
+        - "Malware Domain List"
+        - "Cameleon"
+        - "Disconnect.me"
+        - "Spam404"
+      default: ["StevenBlack Unified", "Malware Domain List"]
+      description: "Default blocklists to enable"
+    
+    custom_blocklists:
+      type: "textarea"
+      description: "Custom blocklist URLs (one per line)"
+
+# Health check
+healthcheck:
+  test: ["CMD", "dig", "@127.0.0.1", "google.com", "+short"]
+  interval: "30s"
+  timeout: "10s"
+  retries: 3
+
+# Dependencies
+dependencies: []
+
+# URLs generated for this service
+urls:
+  web: "https://pihole.${DOMAIN}/admin"
+
+# Storage volumes
+volumes:
+  - name: "pihole-data"
+    description: "Pi-hole configuration and blocklists"
+  - name: "pihole-dnsmasq"
+    description: "Dnsmasq configuration files"
+
+# Environment variables
+environment_variables:
+  - name: "PIHOLE_PASSWORD"
+    description: "Pi-hole admin password"
+    generated: true
+    type: "password"
+  
+  - name: "PRIMARY_DNS"
+    description: "Primary upstream DNS server"
+    default: "1.1.1.1"
+  
+  - name: "SECONDARY_DNS"
+    description: "Secondary upstream DNS server"
+    default: "1.0.0.1"
+  
+  - name: "SERVER_IP"
+    description: "Server IP address"
+    required: true
+
+# Configuration files
+config_files:
+  custom.list:
+    path: "/etc/pihole/custom.list"
+    content: |
+      # Custom DNS entries for local services
+      ${SERVER_IP} ${DOMAIN}
+      ${SERVER_IP} traefik.${DOMAIN}
+      ${SERVER_IP} grafana.${DOMAIN}
+      ${SERVER_IP} prometheus.${DOMAIN}
+      ${SERVER_IP} pihole.${DOMAIN}
+  
+  05-custom-blocklist.conf:
+    path: "/etc/dnsmasq.d/05-custom-blocklist.conf"
+    content: |
+      # Custom dnsmasq configuration
+      # Interface listening
+      interface=eth0
+      
+      # Cache size
+      cache-size=10000
+      
+      # Local domain
+      domain=${DOMAIN}
+      expand-hosts
+      
+      # Logging (optional)
+      log-queries
+      log-facility=/var/log/pihole.log

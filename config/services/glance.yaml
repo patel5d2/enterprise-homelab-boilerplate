@@ -1,0 +1,161 @@
+# Glance Dashboard Service Configuration
+# Beautiful and minimal home lab dashboard
+
+service_name: "glance"
+display_name: "Glance Dashboard"
+category: "dashboards"
+description: "Beautiful and minimal dashboard for your home lab services"
+required: false
+default_enabled: false
+
+# Docker configuration
+docker:
+  image: "glanceapp/glance:latest"
+  container_name: "glance"
+  restart: "unless-stopped"
+  
+  ports:
+    - "8082:8080"
+  
+  volumes:
+    - "glance-data:/app/data"
+    - "glance-config:/app/config"
+  
+  networks:
+    - "traefik"
+  
+  environment:
+    - "TZ=${TIMEZONE}"
+  
+  labels:
+    - "traefik.enable=true"
+    - "traefik.http.routers.glance.rule=Host(`dashboard.${DOMAIN}`)"
+    - "traefik.http.routers.glance.tls.certresolver=letsencrypt"
+    - "traefik.http.services.glance.loadbalancer.server.port=8080"
+
+# Configuration options
+configuration:
+  web:
+    subdomain:
+      type: "string"
+      default: "dashboard"
+      description: "Subdomain for dashboard"
+  
+  theme:
+    color_scheme:
+      type: "choice"
+      choices: ["light", "dark", "auto"]
+      default: "auto"
+      description: "Dashboard color scheme"
+  
+  widgets:
+    enable_weather:
+      type: "boolean"
+      default: true
+      description: "Enable weather widget"
+    
+    weather_location:
+      type: "string"
+      default: "New York"
+      description: "Location for weather widget"
+    
+    enable_bookmarks:
+      type: "boolean"
+      default: true
+      description: "Enable bookmarks widget"
+    
+    enable_calendar:
+      type: "boolean"
+      default: false
+      description: "Enable calendar widget"
+    
+    enable_rss:
+      type: "boolean"
+      default: false
+      description: "Enable RSS feed widget"
+
+# Health check
+healthcheck:
+  test: ["CMD-SHELL", "wget --no-verbose --tries=1 --spider http://localhost:8080 || exit 1"]
+  interval: "30s"
+  timeout: "10s"
+  retries: 3
+
+# Dependencies
+dependencies: []
+
+# URLs generated for this service
+urls:
+  web: "https://dashboard.${DOMAIN}"
+
+# Storage volumes
+volumes:
+  - name: "glance-data"
+    description: "Glance application data"
+  - name: "glance-config"
+    description: "Glance configuration files"
+
+# Configuration files
+config_files:
+  glance.yml:
+    path: "/app/config/glance.yml"
+    content: |
+      server:
+        port: 8080
+        host: 0.0.0.0
+      
+      theme: ${COLOR_SCHEME}
+      
+      pages:
+        - name: Home Lab
+          columns:
+            - size: small
+              widgets:
+                - type: weather
+                  location: ${WEATHER_LOCATION}
+                  hide-on-error: true
+                
+                - type: bookmarks
+                  groups:
+                    - title: Services
+                      links:
+                        - title: Traefik
+                          url: https://traefik.${DOMAIN}
+                        - title: Grafana
+                          url: https://grafana.${DOMAIN}
+                        - title: Prometheus
+                          url: https://prometheus.${DOMAIN}
+                        - title: Uptime Kuma
+                          url: https://uptime.${DOMAIN}
+                        - title: Pi-hole
+                          url: https://pihole.${DOMAIN}/admin
+                        - title: Vaultwarden
+                          url: https://vault.${DOMAIN}
+                    
+                    - title: External
+                      links:
+                        - title: GitHub
+                          url: https://github.com
+                        - title: Docker Hub
+                          url: https://hub.docker.com
+                        - title: Portainer
+                          url: https://portainer.${DOMAIN}
+            
+            - size: full
+              widgets:
+                - type: monitor
+                  cache: 5m
+                  title: System Status
+                  sites:
+                    - title: Traefik
+                      url: https://traefik.${DOMAIN}
+                      icon: si:traefik
+                    - title: Grafana
+                      url: https://grafana.${DOMAIN}
+                      icon: si:grafana
+                    - title: Prometheus
+                      url: https://prometheus.${DOMAIN}
+                      icon: si:prometheus
+                    - title: Uptime Monitor
+                      url: https://uptime.${DOMAIN}
+                      icon: mdi:monitor-eye

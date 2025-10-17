@@ -1,0 +1,113 @@
+# Traefik Reverse Proxy Service Configuration
+# Modern reverse proxy with automatic SSL certificates
+
+service_name: "traefik"
+display_name: "Traefik Reverse Proxy"
+category: "core_infrastructure"
+description: "Modern reverse proxy with automatic SSL certificates and load balancing"
+required: true
+default_enabled: true
+
+# Docker configuration
+docker:
+  image: "traefik:v3.1"
+  container_name: "traefik"
+  restart: "unless-stopped"
+  
+  ports:
+    - "80:80"     # HTTP
+    - "443:443"   # HTTPS
+    - "8080:8080" # Dashboard (optional)
+  
+  volumes:
+    - "/var/run/docker.sock:/var/run/docker.sock:ro"
+    - "traefik-data:/data"
+    - "letsencrypt:/letsencrypt"
+  
+  networks:
+    - "traefik"
+  
+  environment:
+    - "TRAEFIK_LOG_LEVEL=INFO"
+  
+  labels:
+    - "traefik.enable=true"
+    - "traefik.http.routers.traefik.rule=Host(`traefik.${DOMAIN}`)"
+    - "traefik.http.routers.traefik.tls.certresolver=letsencrypt"
+    - "traefik.http.routers.traefik.service=api@internal"
+    - "traefik.http.routers.traefik.middlewares=auth"
+    - "traefik.http.middlewares.auth.basicauth.users=${TRAEFIK_AUTH}"
+
+# Configuration options
+configuration:
+  dashboard:
+    enabled:
+      type: "boolean"
+      default: true
+      description: "Enable Traefik web dashboard"
+    
+    subdomain:
+      type: "string" 
+      default: "traefik"
+      description: "Subdomain for dashboard access"
+  
+  ssl:
+    provider:
+      type: "choice"
+      choices: ["letsencrypt", "self-signed", "custom"]
+      default: "letsencrypt"
+      description: "SSL certificate provider"
+    
+    email:
+      type: "string"
+      required: true
+      description: "Email for Let's Encrypt certificates"
+    
+    staging:
+      type: "boolean"
+      default: false
+      description: "Use Let's Encrypt staging environment (for testing)"
+  
+  security:
+    enable_auth:
+      type: "boolean"
+      default: true
+      description: "Enable basic authentication for dashboard"
+    
+    username:
+      type: "string"
+      default: "admin"
+      description: "Dashboard username"
+    
+    password:
+      type: "password"
+      required: true
+      description: "Dashboard password"
+
+# Health check
+healthcheck:
+  test: ["CMD", "traefik", "healthcheck", "--ping"]
+  interval: "30s"
+  timeout: "10s"
+  retries: 3
+
+# Dependencies
+dependencies: []
+
+# URLs generated for this service
+urls:
+  dashboard: "https://traefik.${DOMAIN}"
+
+# Storage volumes
+volumes:
+  - name: "traefik-data"
+    description: "Traefik configuration data"
+  - name: "letsencrypt"
+    description: "Let's Encrypt certificate storage"
+
+# Environment variables
+environment_variables:
+  - name: "TRAEFIK_AUTH"
+    description: "Basic auth hash for dashboard"
+    generated: true
+    type: "htpasswd"

@@ -1,0 +1,155 @@
+# Nginx Proxy Manager Service Configuration
+# Web-based reverse proxy management with SSL
+
+service_name: "nginx-proxy-manager"
+display_name: "Nginx Proxy Manager"
+category: "proxy"
+description: "Web-based reverse proxy management with automatic SSL certificates"
+required: false
+default_enabled: false
+conflicts_with: ["traefik", "caddy"]
+
+# Docker configuration
+docker:
+  image: "jc21/nginx-proxy-manager:latest"
+  container_name: "nginx-proxy-manager"
+  restart: "unless-stopped"
+  
+  ports:
+    - "80:80"
+    - "443:443"
+    - "81:81"
+  
+  volumes:
+    - "nginx-proxy-data:/data"
+    - "nginx-proxy-letsencrypt:/etc/letsencrypt"
+  
+  networks:
+    - "traefik"
+  
+  environment:
+    - "DISABLE_IPV6=true"
+    - "TZ=${TIMEZONE}"
+
+# Configuration options
+configuration:
+  web:
+    admin_port:
+      type: "integer"
+      default: 81
+      description: "Admin interface port"
+    
+    subdomain:
+      type: "string"
+      default: "proxy"
+      description: "Subdomain for admin interface"
+  
+  ssl:
+    default_email:
+      type: "string"
+      required: true
+      description: "Default email for SSL certificates"
+    
+    use_letsencrypt:
+      type: "boolean"
+      default: true
+      description: "Enable Let's Encrypt integration"
+    
+    staging:
+      type: "boolean"
+      default: false
+      description: "Use Let's Encrypt staging environment"
+  
+  security:
+    initial_admin_email:
+      type: "string"
+      default: "admin@${DOMAIN}"
+      description: "Initial admin email"
+    
+    initial_admin_password:
+      type: "password"
+      required: true
+      description: "Initial admin password"
+  
+  features:
+    enable_access_lists:
+      type: "boolean"
+      default: true
+      description: "Enable access control lists"
+    
+    enable_custom_locations:
+      type: "boolean"
+      default: true
+      description: "Enable custom location blocks"
+    
+    enable_advanced_config:
+      type: "boolean"
+      default: false
+      description: "Enable advanced nginx configuration"
+
+# Health check
+healthcheck:
+  test: ["CMD", "curl", "-f", "http://localhost:81/api"]
+  interval: "30s"
+  timeout: "10s"
+  retries: 3
+
+# Dependencies
+dependencies: []
+
+# URLs generated for this service
+urls:
+  admin: "http://${SERVER_IP}:81"
+  web: "https://proxy.${DOMAIN}"
+
+# Storage volumes
+volumes:
+  - name: "nginx-proxy-data"
+    description: "Nginx Proxy Manager configuration"
+  - name: "nginx-proxy-letsencrypt"
+    description: "Let's Encrypt certificates"
+
+# Environment variables
+environment_variables:
+  - name: "INITIAL_ADMIN_EMAIL"
+    description: "Initial admin email"
+    default: "admin@${DOMAIN}"
+  
+  - name: "INITIAL_ADMIN_PASSWORD"
+    description: "Initial admin password"
+    generated: true
+    type: "password"
+  
+  - name: "SERVER_IP"
+    description: "Server IP address"
+    required: true
+
+# Default proxy hosts configuration
+default_hosts:
+  - domain: "proxy.${DOMAIN}"
+    forward_hostname: "nginx-proxy-manager"
+    forward_port: 81
+    ssl_enabled: true
+    ssl_forced: true
+    
+  - domain: "*.${DOMAIN}"
+    forward_hostname: "traefik"
+    forward_port: 80
+    ssl_enabled: true
+    ssl_forced: true
+    condition: "!traefik_enabled"
+
+# Post-installation notes
+post_install_notes: |
+  📋 Nginx Proxy Manager Setup Instructions:
+  
+  1. Access admin interface at: http://${SERVER_IP}:81
+  2. Default login credentials:
+     - Email: admin@example.com
+     - Password: changeme
+  3. Change the default password immediately
+  4. Add your domain and configure SSL certificates
+  5. Create proxy hosts for your services
+  
+  ⚠️  Important: This service conflicts with Traefik/Caddy
+  ⚠️  Make sure to update DNS records to point to this server

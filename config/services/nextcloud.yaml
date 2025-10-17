@@ -1,0 +1,210 @@
+# Nextcloud Service Configuration
+# Self-hosted cloud storage and collaboration platform
+
+service_name: "nextcloud"
+display_name: "Nextcloud"
+category: "storage"
+description: "Self-hosted cloud storage and collaboration platform"
+required: false
+default_enabled: false
+
+# Docker configuration
+docker:
+  image: "nextcloud:latest"
+  container_name: "nextcloud"
+  restart: "unless-stopped"
+  
+  ports:
+    - "8086:80"
+  
+  volumes:
+    - "nextcloud-data:/var/www/html"
+    - "nextcloud-config:/var/www/html/config"
+    - "nextcloud-files:/var/www/html/data"
+  
+  networks:
+    - "traefik"
+  
+  environment:
+    - "NEXTCLOUD_ADMIN_USER=${NEXTCLOUD_ADMIN_USER}"
+    - "NEXTCLOUD_ADMIN_PASSWORD=${NEXTCLOUD_ADMIN_PASSWORD}"
+    - "NEXTCLOUD_TRUSTED_DOMAINS=nextcloud.${DOMAIN}"
+    - "OVERWRITEPROTOCOL=https"
+    - "OVERWRITECLIURL=https://nextcloud.${DOMAIN}"
+    - "OVERWRITEHOST=nextcloud.${DOMAIN}"
+    - "POSTGRES_HOST=postgres"
+    - "POSTGRES_DB=${NEXTCLOUD_DB_NAME}"
+    - "POSTGRES_USER=${NEXTCLOUD_DB_USER}"
+    - "POSTGRES_PASSWORD=${NEXTCLOUD_DB_PASSWORD}"
+    - "REDIS_HOST=redis"
+    - "REDIS_HOST_PASSWORD=${REDIS_PASSWORD}"
+    - "TZ=${TIMEZONE}"
+  
+  labels:
+    - "traefik.enable=true"
+    - "traefik.http.routers.nextcloud.rule=Host(`nextcloud.${DOMAIN}`)"
+    - "traefik.http.routers.nextcloud.tls.certresolver=letsencrypt"
+    - "traefik.http.services.nextcloud.loadbalancer.server.port=80"
+    - "traefik.http.middlewares.nextcloud-caldav.redirectregex.permanent=true"
+    - "traefik.http.middlewares.nextcloud-caldav.redirectregex.regex=^https://(.*)/.well-known/(card|cal)dav"
+    - "traefik.http.middlewares.nextcloud-caldav.redirectregex.replacement=https://$$1/remote.php/dav/"
+    - "traefik.http.routers.nextcloud.middlewares=nextcloud-caldav"
+
+# Configuration options
+configuration:
+  web:
+    subdomain:
+      type: "string"
+      default: "nextcloud"
+      description: "Subdomain for web interface"
+  
+  admin:
+    username:
+      type: "string"
+      default: "admin"
+      description: "Admin username"
+    
+    password:
+      type: "password"
+      required: true
+      description: "Admin password"
+  
+  database:
+    name:
+      type: "string"
+      default: "nextcloud"
+      description: "Database name"
+    
+    user:
+      type: "string"
+      default: "nextcloud"
+      description: "Database user"
+    
+    password:
+      type: "password"
+      required: true
+      description: "Database password"
+  
+  storage:
+    max_upload_size:
+      type: "string"
+      default: "512M"
+      description: "Maximum upload file size"
+    
+    memory_limit:
+      type: "string"
+      default: "512M"
+      description: "PHP memory limit"
+  
+  features:
+    enable_office:
+      type: "boolean"
+      default: false
+      description: "Enable Collabora Online office suite"
+    
+    enable_talk:
+      type: "boolean"
+      default: false
+      description: "Enable Nextcloud Talk (requires TURN server)"
+    
+    enable_cron:
+      type: "boolean"
+      default: true
+      description: "Enable background job cron"
+
+# Health check
+healthcheck:
+  test: ["CMD", "curl", "-f", "http://localhost/status.php"]
+  interval: "30s"
+  timeout: "10s"
+  retries: 3
+
+# Dependencies
+dependencies: ["postgresql", "redis"]
+
+# URLs generated for this service
+urls:
+  web: "https://nextcloud.${DOMAIN}"
+
+# Storage volumes
+volumes:
+  - name: "nextcloud-data"
+    description: "Nextcloud application files"
+  - name: "nextcloud-config"
+    description: "Nextcloud configuration"
+  - name: "nextcloud-files"
+    description: "User files and data"
+
+# Environment variables
+environment_variables:
+  - name: "NEXTCLOUD_ADMIN_USER"
+    description: "Nextcloud admin username"
+    default: "admin"
+  
+  - name: "NEXTCLOUD_ADMIN_PASSWORD"
+    description: "Nextcloud admin password"
+    generated: true
+    type: "password"
+  
+  - name: "NEXTCLOUD_DB_NAME"
+    description: "Database name"
+    default: "nextcloud"
+  
+  - name: "NEXTCLOUD_DB_USER"
+    description: "Database user"
+    default: "nextcloud"
+  
+  - name: "NEXTCLOUD_DB_PASSWORD"
+    description: "Database password"
+    generated: true
+    type: "password"
+
+# Additional services
+additional_services:
+  nextcloud_cron:
+    enabled_when: "features.enable_cron"
+    docker:
+      image: "nextcloud:latest"
+      container_name: "nextcloud-cron"
+      restart: "unless-stopped"
+      
+      volumes:
+        - "nextcloud-data:/var/www/html"
+        - "nextcloud-config:/var/www/html/config"
+        - "nextcloud-files:/var/www/html/data"
+      
+      networks:
+        - "traefik"
+      
+      environment:
+        - "POSTGRES_HOST=postgres"
+        - "POSTGRES_DB=${NEXTCLOUD_DB_NAME}"
+        - "POSTGRES_USER=${NEXTCLOUD_DB_USER}"
+        - "POSTGRES_PASSWORD=${NEXTCLOUD_DB_PASSWORD}"
+        - "REDIS_HOST=redis"
+        - "REDIS_HOST_PASSWORD=${REDIS_PASSWORD}"
+      
+      entrypoint: "/cron.sh"
+      
+      depends_on:
+        - "nextcloud"
+
+# Post-installation notes
+post_install_notes: |
+  📋 Nextcloud Setup Complete!
+  
+  🌐 Access your instance at: https://nextcloud.${DOMAIN}
+  👤 Admin user: ${NEXTCLOUD_ADMIN_USER}
+  🔑 Admin password: [Generated - check .env file]
+  
+  📋 Next steps:
+  1. Complete the setup wizard
+  2. Install recommended apps
+  3. Configure email settings
+  4. Set up user accounts
+  5. Configure external storage (optional)
+  
+  🔧 Performance tips:
+  - Enable Redis caching (already configured)
+  - Set up cron jobs (included if enabled)
+  - Consider enabling office suite for document editing

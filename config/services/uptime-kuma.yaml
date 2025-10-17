@@ -1,0 +1,166 @@
+# Uptime Kuma Service Configuration
+# Beautiful uptime monitoring with notifications
+
+service_name: "uptime-kuma"
+display_name: "Uptime Kuma"
+category: "monitoring"
+description: "Beautiful and modern uptime monitoring with notifications"
+required: false
+default_enabled: false
+
+# Docker configuration
+docker:
+  image: "louislam/uptime-kuma:1"
+  container_name: "uptime-kuma"
+  restart: "unless-stopped"
+  
+  ports:
+    - "3001:3001"
+  
+  volumes:
+    - "uptime-kuma-data:/app/data"
+    - "/var/run/docker.sock:/var/run/docker.sock:ro"
+  
+  networks:
+    - "traefik"
+  
+  environment:
+    - "TZ=${TIMEZONE}"
+    - "PORT=3001"
+  
+  labels:
+    - "traefik.enable=true"
+    - "traefik.http.routers.uptime-kuma.rule=Host(`uptime.${DOMAIN}`)"
+    - "traefik.http.routers.uptime-kuma.tls.certresolver=letsencrypt"
+    - "traefik.http.services.uptime-kuma.loadbalancer.server.port=3001"
+
+# Configuration options
+configuration:
+  web:
+    subdomain:
+      type: "string"
+      default: "uptime"
+      description: "Subdomain for web interface"
+  
+  monitoring:
+    check_interval:
+      type: "integer"
+      default: 60
+      description: "Default check interval in seconds"
+    
+    retry_interval:
+      type: "integer"
+      default: 60
+      description: "Retry interval for failed checks"
+    
+    resend_interval:
+      type: "integer"
+      default: 0
+      description: "Resend interval for notifications (0 = disabled)"
+  
+  notifications:
+    enable_discord:
+      type: "boolean"
+      default: false
+      description: "Enable Discord notifications"
+    
+    discord_webhook:
+      type: "string"
+      default: ""
+      description: "Discord webhook URL"
+    
+    enable_slack:
+      type: "boolean"
+      default: false
+      description: "Enable Slack notifications"
+    
+    slack_webhook:
+      type: "string"
+      default: ""
+      description: "Slack webhook URL"
+    
+    enable_telegram:
+      type: "boolean"
+      default: false
+      description: "Enable Telegram notifications"
+    
+    telegram_bot_token:
+      type: "string"
+      default: ""
+      description: "Telegram bot token"
+    
+    telegram_chat_id:
+      type: "string"
+      default: ""
+      description: "Telegram chat ID"
+  
+  docker:
+    enable_docker_monitoring:
+      type: "boolean"
+      default: false
+      description: "Enable Docker container monitoring"
+
+# Health check
+healthcheck:
+  test: ["CMD-SHELL", "wget --no-verbose --tries=1 --spider http://localhost:3001 || exit 1"]
+  interval: "30s"
+  timeout: "10s"
+  retries: 3
+
+# Dependencies
+dependencies: []
+
+# URLs generated for this service
+urls:
+  web: "https://uptime.${DOMAIN}"
+
+# Storage volumes
+volumes:
+  - name: "uptime-kuma-data"
+    description: "Uptime Kuma database and configuration"
+
+# Environment variables
+environment_variables:
+  - name: "DISCORD_WEBHOOK"
+    description: "Discord webhook URL for notifications"
+    default: ""
+  
+  - name: "SLACK_WEBHOOK"
+    description: "Slack webhook URL for notifications"
+    default: ""
+  
+  - name: "TELEGRAM_BOT_TOKEN"
+    description: "Telegram bot token"
+    default: ""
+  
+  - name: "TELEGRAM_CHAT_ID"
+    description: "Telegram chat ID"
+    default: ""
+
+# Default monitors configuration
+default_monitors:
+  - name: "Home Lab Domain"
+    type: "http"
+    url: "https://${DOMAIN}"
+    interval: 300
+    
+  - name: "Traefik"
+    type: "http"
+    url: "https://traefik.${DOMAIN}"
+    interval: 60
+    
+  - name: "Grafana"
+    type: "http"
+    url: "https://grafana.${DOMAIN}"
+    interval: 300
+    
+  - name: "Prometheus"
+    type: "http"
+    url: "https://prometheus.${DOMAIN}"
+    interval: 300
+    
+  - name: "Pi-hole"
+    type: "http"
+    url: "https://pihole.${DOMAIN}/admin"
+    interval: 300
+    condition: "pihole_enabled"

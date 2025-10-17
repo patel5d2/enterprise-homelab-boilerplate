@@ -1,0 +1,180 @@
+# BookStack Documentation Service Configuration
+# Self-hosted documentation and wiki platform
+
+service_name: "bookstack"
+display_name: "BookStack"
+category: "documentation"
+description: "Self-hosted documentation and wiki platform with rich editing features"
+required: false
+default_enabled: false
+
+# Docker configuration
+docker:
+  image: "lscr.io/linuxserver/bookstack:latest"
+  container_name: "bookstack"
+  restart: "unless-stopped"
+  
+  ports:
+    - "8087:80"
+  
+  volumes:
+    - "bookstack-data:/config"
+  
+  networks:
+    - "traefik"
+  
+  environment:
+    - "PUID=1000"
+    - "PGID=1000"
+    - "APP_URL=https://docs.${DOMAIN}"
+    - "DB_HOST=bookstack-db"
+    - "DB_PORT=3306"
+    - "DB_USER=bookstack"
+    - "DB_PASS=${BOOKSTACK_DB_PASSWORD}"
+    - "DB_DATABASE=bookstack"
+    - "TZ=${TIMEZONE}"
+  
+  labels:
+    - "traefik.enable=true"
+    - "traefik.http.routers.bookstack.rule=Host(`docs.${DOMAIN}`)"
+    - "traefik.http.routers.bookstack.tls.certresolver=letsencrypt"
+    - "traefik.http.services.bookstack.loadbalancer.server.port=80"
+  
+  depends_on:
+    - "bookstack-db"
+
+# Configuration options
+configuration:
+  web:
+    subdomain:
+      type: "string"
+      default: "docs"
+      description: "Subdomain for documentation site"
+  
+  database:
+    password:
+      type: "password"
+      required: true
+      description: "Database password"
+  
+  features:
+    enable_registration:
+      type: "boolean"
+      default: false
+      description: "Allow user self-registration"
+    
+    default_theme:
+      type: "choice"
+      choices: ["default", "dark"]
+      default: "default"
+      description: "Default theme"
+    
+    enable_ldap:
+      type: "boolean"
+      default: false
+      description: "Enable LDAP authentication"
+  
+  email:
+    mail_driver:
+      type: "choice"
+      choices: ["smtp", "sendmail", "log"]
+      default: "smtp"
+      description: "Email driver"
+    
+    mail_host:
+      type: "string"
+      default: ""
+      description: "SMTP host"
+    
+    mail_port:
+      type: "integer"
+      default: 587
+      description: "SMTP port"
+    
+    mail_username:
+      type: "string"
+      default: ""
+      description: "SMTP username"
+    
+    mail_password:
+      type: "password"
+      default: ""
+      description: "SMTP password"
+
+# Health check
+healthcheck:
+  test: ["CMD", "curl", "-f", "http://localhost/login"]
+  interval: "30s"
+  timeout: "10s"
+  retries: 3
+
+# Dependencies
+dependencies: []
+
+# URLs generated for this service
+urls:
+  web: "https://docs.${DOMAIN}"
+
+# Storage volumes
+volumes:
+  - name: "bookstack-data"
+    description: "BookStack configuration and uploads"
+  - name: "bookstack-db-data"
+    description: "MySQL database files"
+
+# Environment variables
+environment_variables:
+  - name: "BOOKSTACK_DB_PASSWORD"
+    description: "Database password"
+    generated: true
+    type: "password"
+
+# Additional services (database)
+additional_services:
+  bookstack_db:
+    docker:
+      image: "lscr.io/linuxserver/mariadb:latest"
+      container_name: "bookstack-db"
+      restart: "unless-stopped"
+      
+      volumes:
+        - "bookstack-db-data:/config"
+      
+      networks:
+        - "traefik"
+      
+      environment:
+        - "PUID=1000"
+        - "PGID=1000"
+        - "MYSQL_ROOT_PASSWORD=${BOOKSTACK_DB_PASSWORD}"
+        - "TZ=${TIMEZONE}"
+        - "MYSQL_DATABASE=bookstack"
+        - "MYSQL_USER=bookstack"
+        - "MYSQL_PASSWORD=${BOOKSTACK_DB_PASSWORD}"
+
+# Post-installation notes
+post_install_notes: |
+  📚 BookStack Documentation Platform Ready!
+  
+  🌐 Access your wiki at: https://docs.${DOMAIN}
+  
+  📋 Default login credentials:
+  👤 Email: admin@admin.com
+  🔑 Password: password
+  
+  ⚠️  IMPORTANT: Change the default password immediately!
+  
+  📋 Next steps:
+  1. Login and change admin password
+  2. Configure site settings
+  3. Set up email notifications (optional)
+  4. Create your first book and pages
+  5. Configure user permissions
+  
+  🔧 Features:
+  - Rich WYSIWYG editor
+  - Markdown support
+  - Page templates
+  - User management
+  - Search functionality
+  - Export to PDF/HTML

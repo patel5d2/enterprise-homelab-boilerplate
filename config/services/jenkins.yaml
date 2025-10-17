@@ -1,0 +1,165 @@
+# Jenkins CI/CD Service Configuration
+# Automation server for CI/CD pipelines
+
+service_name: "jenkins"
+display_name: "Jenkins"
+category: "development"
+description: "Open source automation server for continuous integration and deployment"
+required: false
+default_enabled: false
+
+# Docker configuration
+docker:
+  image: "jenkins/jenkins:lts"
+  container_name: "jenkins"
+  restart: "unless-stopped"
+  
+  ports:
+    - "8085:8080"
+    - "50000:50000"
+  
+  volumes:
+    - "jenkins-data:/var/jenkins_home"
+    - "/var/run/docker.sock:/var/run/docker.sock:rw"
+    - "jenkins-backup:/backup"
+  
+  networks:
+    - "traefik"
+  
+  environment:
+    - "JENKINS_OPTS=--httpPort=8080 --prefix=/jenkins"
+    - "JAVA_OPTS=-Djenkins.install.runSetupWizard=false -Xmx${MEMORY_LIMIT}"
+    - "TZ=${TIMEZONE}"
+  
+  labels:
+    - "traefik.enable=true"
+    - "traefik.http.routers.jenkins.rule=Host(`jenkins.${DOMAIN}`)"
+    - "traefik.http.routers.jenkins.tls.certresolver=letsencrypt"
+    - "traefik.http.services.jenkins.loadbalancer.server.port=8080"
+  
+  user: "root"
+
+# Configuration options
+configuration:
+  web:
+    subdomain:
+      type: "string"
+      default: "jenkins"
+      description: "Subdomain for web interface"
+  
+  resources:
+    memory_limit:
+      type: "string"
+      default: "2g"
+      description: "Java heap memory limit"
+    
+    cpu_limit:
+      type: "string"
+      default: "2"
+      description: "CPU limit"
+  
+  security:
+    admin_username:
+      type: "string"
+      default: "admin"
+      description: "Initial admin username"
+    
+    admin_password:
+      type: "password"
+      required: true
+      description: "Initial admin password"
+  
+  features:
+    enable_agents:
+      type: "boolean"
+      default: true
+      description: "Enable Jenkins agents"
+    
+    max_agents:
+      type: "integer"
+      default: 5
+      description: "Maximum number of agents"
+    
+    enable_docker_plugin:
+      type: "boolean"
+      default: true
+      description: "Enable Docker plugin for container builds"
+  
+  backup:
+    enabled:
+      type: "boolean"
+      default: true
+      description: "Enable automated backups"
+    
+    schedule:
+      type: "string"
+      default: "H 2 * * 0"
+      description: "Backup schedule (cron format)"
+
+# Health check
+healthcheck:
+  test: ["CMD-SHELL", "curl -f http://localhost:8080/login || exit 1"]
+  interval: "30s"
+  timeout: "10s"
+  retries: 5
+  start_period: "5m"
+
+# Dependencies
+dependencies: []
+
+# URLs generated for this service
+urls:
+  web: "https://jenkins.${DOMAIN}"
+
+# Storage volumes
+volumes:
+  - name: "jenkins-data"
+    description: "Jenkins home directory and workspace"
+  - name: "jenkins-backup"
+    description: "Jenkins backup files"
+
+# Environment variables
+environment_variables:
+  - name: "JENKINS_ADMIN_USERNAME"
+    description: "Jenkins admin username"
+    default: "admin"
+  
+  - name: "JENKINS_ADMIN_PASSWORD"
+    description: "Jenkins admin password"
+    generated: true
+    type: "password"
+  
+  - name: "MEMORY_LIMIT"
+    description: "Java memory limit"
+    default: "2g"
+
+# Initialization scripts
+init_scripts:
+  security.groovy: |
+    #!groovy
+    import jenkins.model.*
+    import hudson.security.*
+    import jenkins.security.s2m.AdminWhitelistRule
+    
+    def instance = Jenkins.getInstance()
+    
+    def hudsonRealm = new HudsonPrivateSecurityRealm(false)
+    hudsonRealm.createAccount("${JENKINS_ADMIN_USERNAME}", "${JENKINS_ADMIN_PASSWORD}")
+    instance.setSecurityRealm(hudsonRealm)
+    
+    def strategy = new FullControlOnceLoggedInAuthorizationStrategy()
+    strategy.setAllowAnonymousRead(false)
+    instance.setAuthorizationStrategy(strategy)
+    instance.save()
+
+# Plugin list
+plugins:
+  - "ant:475.vf34069fef73c"
+  - "build-timeout:1.30"
+  - "credentials-binding:631.v861fa_8e_10c85"
+  - "docker-workflow:563.vd5d2e5c4007f"
+  - "git:5.0.0"
+  - "github-branch-source:1725.v7a_0f8b_b_b_a_d4b_"
+  - "pipeline-stage-view:2.25"
+  - "workflow-aggregator:596.v8c21c963d92d"
+  - "ws-cleanup:0.45"

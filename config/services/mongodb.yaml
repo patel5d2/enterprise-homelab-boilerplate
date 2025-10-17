@@ -1,0 +1,145 @@
+# MongoDB Database Service Configuration
+# Document-oriented NoSQL database
+
+service_name: "mongodb"
+display_name: "MongoDB"
+category: "databases"
+description: "High-performance document-oriented NoSQL database"
+required: false
+default_enabled: false
+
+# Docker configuration
+docker:
+  image: "mongo:7"
+  container_name: "mongodb"
+  restart: "unless-stopped"
+  
+  ports:
+    - "27017:27017"
+  
+  volumes:
+    - "mongodb-data:/data/db"
+    - "mongodb-config:/data/configdb"
+    - "mongodb-backups:/backups"
+  
+  networks:
+    - "traefik"
+  
+  environment:
+    - "MONGO_INITDB_ROOT_USERNAME=${MONGO_ROOT_USERNAME}"
+    - "MONGO_INITDB_ROOT_PASSWORD=${MONGO_ROOT_PASSWORD}"
+    - "MONGO_INITDB_DATABASE=${MONGO_INITDB_DATABASE}"
+    - "TZ=${TIMEZONE}"
+  
+  command: "mongod --auth --bind_ip_all"
+
+# Configuration options
+configuration:
+  database:
+    root_username:
+      type: "string"
+      default: "admin"
+      description: "Root username for MongoDB"
+    
+    root_password:
+      type: "password"
+      required: true
+      description: "Root password for MongoDB"
+    
+    init_database:
+      type: "string"
+      default: "homelab"
+      description: "Initial database name"
+  
+  performance:
+    cache_size:
+      type: "string"
+      default: "1GB"
+      description: "WiredTiger cache size"
+    
+    max_connections:
+      type: "integer"
+      default: 1000
+      description: "Maximum number of connections"
+  
+  backup:
+    enabled:
+      type: "boolean"
+      default: true
+      description: "Enable automated backups"
+    
+    schedule:
+      type: "string"
+      default: "0 3 * * *"
+      description: "Backup schedule (cron format)"
+    
+    retention_days:
+      type: "integer"
+      default: 30
+      description: "Number of days to keep backups"
+
+# Health check
+healthcheck:
+  test: ["CMD", "mongosh", "--eval", "db.adminCommand('ping')"]
+  interval: "30s"
+  timeout: "10s"
+  retries: 3
+
+# Dependencies
+dependencies: []
+
+# Storage volumes
+volumes:
+  - name: "mongodb-data"
+    description: "MongoDB database files"
+  - name: "mongodb-config"
+    description: "MongoDB configuration files"
+  - name: "mongodb-backups"
+    description: "MongoDB backup files"
+
+# Environment variables
+environment_variables:
+  - name: "MONGO_ROOT_USERNAME"
+    description: "MongoDB root username"
+    default: "admin"
+  
+  - name: "MONGO_ROOT_PASSWORD"
+    description: "MongoDB root password"
+    generated: true
+    type: "password"
+  
+  - name: "MONGO_INITDB_DATABASE"
+    description: "Initial database name"
+    default: "homelab"
+
+# Additional services
+additional_services:
+  mongo_express:
+    enabled_when: "web_interface.enabled"
+    docker:
+      image: "mongo-express:latest"
+      container_name: "mongo-express"
+      restart: "unless-stopped"
+      
+      ports:
+        - "8083:8081"
+      
+      networks:
+        - "traefik"
+      
+      environment:
+        - "ME_CONFIG_MONGODB_ADMINUSERNAME=${MONGO_ROOT_USERNAME}"
+        - "ME_CONFIG_MONGODB_ADMINPASSWORD=${MONGO_ROOT_PASSWORD}"
+        - "ME_CONFIG_MONGODB_SERVER=mongodb"
+        - "ME_CONFIG_BASICAUTH_USERNAME=${MONGO_EXPRESS_USER}"
+        - "ME_CONFIG_BASICAUTH_PASSWORD=${MONGO_EXPRESS_PASSWORD}"
+        - "ME_CONFIG_MONGODB_ENABLE_ADMIN=true"
+      
+      labels:
+        - "traefik.enable=true"
+        - "traefik.http.routers.mongo-express.rule=Host(`mongo.${DOMAIN}`)"
+        - "traefik.http.routers.mongo-express.tls.certresolver=letsencrypt"
+        - "traefik.http.services.mongo-express.loadbalancer.server.port=8081"
+      
+      depends_on:
+        - "mongodb"

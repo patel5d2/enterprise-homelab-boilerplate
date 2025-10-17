@@ -1,0 +1,180 @@
+# Grafana Visualization Service Configuration
+# Beautiful dashboards and monitoring visualization
+
+service_name: "grafana"
+display_name: "Grafana"
+category: "monitoring"
+description: "Beautiful dashboards and visualization for monitoring data"
+required: false
+default_enabled: true
+
+# Docker configuration
+docker:
+  image: "grafana/grafana:latest"
+  container_name: "grafana"
+  restart: "unless-stopped"
+  
+  ports:
+    - "3000:3000"
+  
+  volumes:
+    - "grafana-data:/var/lib/grafana"
+    - "grafana-config:/etc/grafana"
+  
+  networks:
+    - "traefik"
+  
+  environment:
+    - "GF_SECURITY_ADMIN_USER=${GRAFANA_ADMIN_USER}"
+    - "GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_ADMIN_PASSWORD}"
+    - "GF_SERVER_ROOT_URL=https://grafana.${DOMAIN}"
+    - "GF_SERVER_DOMAIN=grafana.${DOMAIN}"
+    - "GF_INSTALL_PLUGINS=${GRAFANA_PLUGINS}"
+    - "GF_USERS_ALLOW_SIGN_UP=false"
+    - "TZ=${TIMEZONE}"
+  
+  labels:
+    - "traefik.enable=true"
+    - "traefik.http.routers.grafana.rule=Host(`grafana.${DOMAIN}`)"
+    - "traefik.http.routers.grafana.tls.certresolver=letsencrypt"
+    - "traefik.http.services.grafana.loadbalancer.server.port=3000"
+
+# Configuration options
+configuration:
+  admin:
+    username:
+      type: "string"
+      default: "admin"
+      description: "Admin username"
+    
+    password:
+      type: "password"
+      required: true
+      description: "Admin password"
+  
+  web:
+    subdomain:
+      type: "string"
+      default: "grafana"
+      description: "Subdomain for web interface"
+  
+  security:
+    allow_signup:
+      type: "boolean"
+      default: false
+      description: "Allow user self-registration"
+    
+    anonymous_access:
+      type: "boolean"
+      default: false
+      description: "Enable anonymous access"
+  
+  plugins:
+    enabled:
+      type: "multiselect"
+      choices: 
+        - "grafana-piechart-panel"
+        - "grafana-worldmap-panel"
+        - "grafana-clock-panel"
+        - "grafana-simple-json-datasource"
+        - "alexanderzobnin-zabbix-app"
+      default: ["grafana-piechart-panel", "grafana-clock-panel"]
+      description: "Grafana plugins to install"
+  
+  datasources:
+    prometheus_url:
+      type: "string"
+      default: "http://prometheus:9090"
+      description: "Prometheus datasource URL"
+
+# Health check
+healthcheck:
+  test: ["CMD-SHELL", "wget --no-verbose --tries=1 --spider http://localhost:3000/api/health || exit 1"]
+  interval: "30s"
+  timeout: "10s"
+  retries: 3
+
+# Dependencies
+dependencies: ["prometheus"]
+
+# URLs generated for this service
+urls:
+  web: "https://grafana.${DOMAIN}"
+
+# Storage volumes
+volumes:
+  - name: "grafana-data"
+    description: "Grafana database and dashboards"
+  - name: "grafana-config"
+    description: "Grafana configuration files"
+
+# Environment variables
+environment_variables:
+  - name: "GRAFANA_ADMIN_USER"
+    description: "Grafana admin username"
+    default: "admin"
+  
+  - name: "GRAFANA_ADMIN_PASSWORD"
+    description: "Grafana admin password"
+    generated: true
+    type: "password"
+  
+  - name: "GRAFANA_PLUGINS"
+    description: "Comma-separated list of plugins to install"
+    generated: true
+
+# Configuration files
+config_files:
+  grafana.ini:
+    path: "/etc/grafana/grafana.ini"
+    content: |
+      [server]
+      http_port = 3000
+      domain = grafana.${DOMAIN}
+      root_url = https://grafana.${DOMAIN}
+      
+      [security]
+      admin_user = ${GRAFANA_ADMIN_USER}
+      admin_password = ${GRAFANA_ADMIN_PASSWORD}
+      allow_sign_up = ${ALLOW_SIGNUP}
+      
+      [users]
+      allow_sign_up = ${ALLOW_SIGNUP}
+      auto_assign_org = true
+      auto_assign_org_id = 1
+      auto_assign_org_role = Viewer
+      
+      [auth.anonymous]
+      enabled = ${ANONYMOUS_ACCESS}
+      org_name = Main Org.
+      org_role = Viewer
+      
+      [dashboards]
+      default_home_dashboard_path = /var/lib/grafana/dashboards/home.json
+      
+      [alerting]
+      enabled = true
+      execute_alerts = true
+      
+      [metrics]
+      enabled = true
+      interval_seconds = 10
+
+  datasources.yml:
+    path: "/etc/grafana/provisioning/datasources/datasources.yml"
+    content: |
+      apiVersion: 1
+      
+      datasources:
+        - name: Prometheus
+          type: prometheus
+          url: ${PROMETHEUS_URL}
+          access: proxy
+          isDefault: true
+          editable: true
+          
+        - name: Loki
+          type: loki
+          url: http://loki:3100
+          access: proxy
+          editable: true

@@ -1,0 +1,165 @@
+# n8n Workflow Automation Service Configuration
+# Visual workflow automation platform
+
+service_name: "n8n"
+display_name: "n8n"
+category: "automation"
+description: "Visual workflow automation platform for connecting apps and services"
+required: false
+default_enabled: false
+
+# Docker configuration
+docker:
+  image: "n8nio/n8n:latest"
+  container_name: "n8n"
+  restart: "unless-stopped"
+  
+  ports:
+    - "5678:5678"
+  
+  volumes:
+    - "n8n-data:/home/node/.n8n"
+  
+  networks:
+    - "traefik"
+  
+  environment:
+    - "N8N_HOST=n8n.${DOMAIN}"
+    - "N8N_PORT=5678"
+    - "N8N_PROTOCOL=https"
+    - "WEBHOOK_URL=https://n8n.${DOMAIN}/"
+    - "GENERIC_TIMEZONE=${TIMEZONE}"
+    - "N8N_BASIC_AUTH_ACTIVE=${BASIC_AUTH_ACTIVE}"
+    - "N8N_BASIC_AUTH_USER=${N8N_BASIC_AUTH_USER}"
+    - "N8N_BASIC_AUTH_PASSWORD=${N8N_BASIC_AUTH_PASSWORD}"
+    - "DB_TYPE=sqlite"
+    - "N8N_ENCRYPTION_KEY=${N8N_ENCRYPTION_KEY}"
+    - "N8N_USER_MANAGEMENT_DISABLED=false"
+    - "N8N_DIAGNOSTICS_ENABLED=false"
+    - "N8N_PERSONALIZATION_ENABLED=false"
+    - "N8N_VERSION_NOTIFICATIONS_ENABLED=false"
+  
+  labels:
+    - "traefik.enable=true"
+    - "traefik.http.routers.n8n.rule=Host(`n8n.${DOMAIN}`)"
+    - "traefik.http.routers.n8n.tls.certresolver=letsencrypt"
+    - "traefik.http.services.n8n.loadbalancer.server.port=5678"
+
+# Configuration options
+configuration:
+  web:
+    subdomain:
+      type: "string"
+      default: "n8n"
+      description: "Subdomain for web interface"
+  
+  authentication:
+    basic_auth_enabled:
+      type: "boolean"
+      default: true
+      description: "Enable basic authentication"
+    
+    basic_auth_user:
+      type: "string"
+      default: "admin"
+      description: "Basic auth username"
+    
+    basic_auth_password:
+      type: "password"
+      required: true
+      description: "Basic auth password"
+  
+  database:
+    type:
+      type: "choice"
+      choices: ["sqlite", "postgres"]
+      default: "sqlite"
+      description: "Database type"
+    
+    postgres_host:
+      type: "string"
+      default: "postgres"
+      description: "PostgreSQL host (if using postgres)"
+    
+    postgres_database:
+      type: "string"
+      default: "n8n"
+      description: "PostgreSQL database name"
+  
+  features:
+    user_management:
+      type: "boolean"
+      default: false
+      description: "Enable user management features"
+    
+    diagnostics:
+      type: "boolean"
+      default: false
+      description: "Enable diagnostics"
+    
+    version_notifications:
+      type: "boolean"
+      default: false
+      description: "Enable version notifications"
+  
+  security:
+    encryption_key:
+      type: "password"
+      required: true
+      description: "Encryption key for sensitive data"
+
+# Health check
+healthcheck:
+  test: ["CMD-SHELL", "wget --no-verbose --tries=1 --spider http://localhost:5678 || exit 1"]
+  interval: "30s"
+  timeout: "10s"
+  retries: 3
+
+# Dependencies
+dependencies: []
+
+# URLs generated for this service
+urls:
+  web: "https://n8n.${DOMAIN}"
+  webhooks: "https://n8n.${DOMAIN}/webhook"
+
+# Storage volumes
+volumes:
+  - name: "n8n-data"
+    description: "n8n workflows and configuration"
+
+# Environment variables
+environment_variables:
+  - name: "BASIC_AUTH_ACTIVE"
+    description: "Enable basic authentication"
+    default: "true"
+  
+  - name: "N8N_BASIC_AUTH_USER"
+    description: "Basic auth username"
+    default: "admin"
+  
+  - name: "N8N_BASIC_AUTH_PASSWORD"
+    description: "Basic auth password"
+    generated: true
+    type: "password"
+  
+  - name: "N8N_ENCRYPTION_KEY"
+    description: "Encryption key for sensitive data"
+    generated: true
+    type: "encryption_key"
+
+# Example workflows
+example_workflows:
+  - name: "System Health Check"
+    description: "Monitor system health and send notifications"
+    trigger: "cron"
+    schedule: "0 */6 * * *"
+    
+  - name: "Backup Notification"
+    description: "Send notifications when backups complete"
+    trigger: "webhook"
+    
+  - name: "Service Status Monitor"
+    description: "Check service status and alert on failures"
+    trigger: "interval"
+    interval: 300
