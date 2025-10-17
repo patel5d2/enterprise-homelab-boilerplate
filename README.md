@@ -77,6 +77,9 @@ chmod +x install.sh labctl
 ### 3. Interactive Configuration
 
 ```bash
+python3 -m venv venv
+#-
+source venv/bin/activate && pip install -e .
 # Interactive setup wizard with rich CLI interface
 ./labctl init
 
