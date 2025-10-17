@@ -110,10 +110,8 @@ The system now provides **categorized service selection**:
 ```
 home-lab-boilerplate/
 ├── 🛠️ install.sh              # System installer
-├── 🐳 generate-compose.sh     # Quick compose generator
 ├── ⚙️ labctl                  # Main CLI wrapper
-├── 📋 config.yaml             # User configuration
-├── 🐳 docker-compose.yml      # Generated services
+├── 🛠️ generate-infrastructure.py # Infrastructure generator
 ├── 🌍 .env / .env.template    # Environment variables
 ├── 📖 README.md               # Complete documentation
 ├── 📁 cli/labctl/            # CLI source code
@@ -124,15 +122,17 @@ home-lab-boilerplate/
 │   │   └── exceptions.py     # Error handling
 │   └── 🖥️ cli/commands/      # CLI commands
 │       ├── init_cmd.py       # Interactive setup
-│       ├── build_cmd.py      # Compose generation
 │       ├── deploy_cmd.py     # Service deployment
-│       ├── status_cmd.py     # Status checking
-│       ├── logs_cmd.py       # Log viewing
-│       └── stop_cmd.py       # Service stopping
-└── 📚 examples/              # Example configurations
-    ├── config.yaml           # Sample config
-    ├── prometheus.yml        # Monitoring config
-    └── glance.yml            # Dashboard config
+│       ├── config_cmd.py     # Configuration management
+│       └── __init__.py       # Command structure
+├── 📁 config/                # Configuration directory
+│   ├── config.example.yaml   # Example configuration
+│   └── services/            # Service-specific configs
+├── 📁 examples/              # Example configurations
+│   ├── config.yaml           # Sample config
+│   ├── prometheus.yml        # Monitoring config
+│   └── glance.yml            # Dashboard config
+└── 📁 data/                  # Runtime data directory
 ```
 
 ## 🎯 User Experience

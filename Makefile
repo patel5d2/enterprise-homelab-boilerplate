@@ -141,5 +141,5 @@ version: ## Show version information
 	labctl version
 
 # Default configuration values
-CONFIG_FILE ?= config/config.yaml
+CONFIG_FILE ?= config.yaml
 COMPOSE_DIR ?= compose

@@ -64,47 +64,44 @@ git clone https://github.com/patel5d2/enterprise-homelab-boilerplate
 cd home-lab-boilerplate
 
 # Make scripts executable and install
-chmod +x install.sh generate-compose.sh
+chmod +x install.sh labctl
 ./install.sh
 
 # This will:
 # ✅ Check system requirements
 # ✅ Create Python virtual environment
 # ✅ Install dependencies
-# ✅ Create labctl command wrapper
+# ✅ Set up CLI command structure
 ```
 
 ### 3. Interactive Configuration
 
 ```bash
-# Interactive setup with service selection
+# Interactive setup wizard with rich CLI interface
 ./labctl init
 
-# OR non-interactive with defaults
-./labctl init --no-interactive
-```
-
-The interactive setup will ask you:
-- **Domain name** (e.g., `homelab.local` or `yourdomain.com`)
-- **Admin email** (for SSL certificates)
-- **Which services to enable** (categorized selection)
-
-### 4. Generate & Deploy
-
-```bash
-# Generate Docker Compose files
+# Generate your infrastructure
 ./labctl build
 
-# Review and configure environment variables
-cp .env.template .env
-# Edit .env with your secrets (API keys, tokens, etc.)
-
-# Deploy your selected services
+# Deploy services
 ./labctl deploy
-
-# Check status
-./labctl status
 ```
+
+The interactive wizard features:
+- 🎨 **Beautiful CLI interface** with colors, panels, and progress bars
+- 📋 **Step-by-step configuration** with helpful examples and tips
+- 🎛️ **Categorized service selection** - choose exactly what you want
+- ⚙️ **Detailed service configuration** - storage, SSL, themes, plugins
+- 🔐 **Automatic secure password generation**
+- 📊 **Configuration summary** before deployment
+- 🚀 **Ready-to-deploy files** generated automatically
+
+**Service Categories Available:**
+- Core Infrastructure, Monitoring, Networking & DNS
+- Security & Secrets, Development & CI/CD
+- Storage & Databases, Automation & Workflows
+- Documentation & Wiki, Media & Entertainment
+- Alternative Proxies
 
 ## 🎮 CLI Commands
 

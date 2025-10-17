@@ -47,7 +47,8 @@ venv.bak/
 .dockerignore
 
 # Home Lab specific
-config/config.yaml
+config.yaml
+config/*.yaml
 config/secrets/
 compose/
 data/

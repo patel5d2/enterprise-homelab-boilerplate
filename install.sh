@@ -100,11 +100,8 @@ initialize_project() {
     mkdir -p config
     mkdir -p compose
     
-    # Copy example config if it doesn't exist
-    if [ ! -f "config.yaml" ] && [ -f "examples/config.yaml" ]; then
-        cp "examples/config.yaml" "config.yaml"
-        print_success "Created initial config.yaml from example"
-    fi
+    # Create directories for proper structure
+    mkdir -p data logs ssl backups
     
     print_success "Project initialized"
 }
@@ -113,21 +110,20 @@ show_usage() {
     echo ""
     print_success "🎉 Home Lab CLI installed successfully!"
     echo ""
-    echo "Usage:"
+    echo "CLI Usage:"
     echo "  ./labctl --help              Show help"
-    echo "  ./labctl init                Initialize configuration"
+    echo "  ./labctl init                Interactive configuration wizard"
     echo "  ./labctl build              Generate Docker Compose files"
     echo "  ./labctl deploy             Deploy services"
     echo "  ./labctl status             Check service status"
     echo "  ./labctl stop               Stop services"
     echo ""
     echo "Quick Start:"
-    echo "  1. Edit config.yaml to customize your setup"
+    echo "  1. Run: ./labctl init"
     echo "  2. Run: ./labctl build"
-    echo "  3. Copy .env.template to .env and configure"
-    echo "  4. Run: ./labctl deploy"
+    echo "  3. Run: ./labctl deploy"
     echo ""
-    print_warning "Remember to configure your domain and email in config.yaml"
+    print_warning "Use './labctl init' for the interactive setup wizard!"
 }
 
 main() {
