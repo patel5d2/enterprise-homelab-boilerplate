@@ -60,7 +60,7 @@ A comprehensive, enterprise-grade home lab infrastructure boilerplate with **int
 
 ```bash
 # Clone the repository
-git clone (https://github.com/patel5d2/enterprise-homelab-boilerplate)
+git clone https://github.com/patel5d2/enterprise-homelab-boilerplate
 cd home-lab-boilerplate
 
 # Make scripts executable and install
