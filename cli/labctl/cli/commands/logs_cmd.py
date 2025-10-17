@@ -23,51 +23,25 @@ def run(
 ) -> None:
     """View service logs"""
     
-    config_path = Path(config_file)
-    if not config_path.exists():
-        raise HomeLabError(f"Configuration file not found: {config_file}")
+    console.print("📋 [bold]Service Logs[/bold]")
     
-    # Load configuration
-    config = Config.load_from_file(config_path)
+    # Look for docker-compose.yml in current directory first
+    compose_file = Path("docker-compose.yml")
+    if not compose_file.exists():
+        if compose_dir:
+            compose_file = Path(compose_dir) / "docker-compose.yml"
+        else:
+            # Try compose subdirectory
+            compose_file = Path("compose/docker-compose.yml")
     
-    # Set compose directory
-    if compose_dir:
-        compose_path = Path(compose_dir)
-    else:
-        compose_path = config_path.parent / "compose"
-    
-    if not compose_path.exists():
-        console.print("[yellow]Compose directory not found. Have you built the project yet?[/yellow]")
-        console.print("Run: [cyan]labctl build[/cyan] first")
-        return
-    
-    # Find compose files to use
-    compose_files = [
-        "docker-compose.yml",
-        "docker-compose.optional.yml",
-        "docker-compose.monitoring.yml", 
-        "docker-compose.security.yml"
-    ]
-    
-    existing_files = [
-        f for f in compose_files 
-        if (compose_path / f).exists()
-    ]
-    
-    if not existing_files:
-        console.print("[yellow]No compose files found[/yellow]")
+    if not compose_file.exists():
+        console.print("[yellow]Docker Compose file not found[/yellow]")
         console.print("Run: [cyan]labctl build[/cyan] to generate compose files")
         return
     
     try:
         # Build docker compose logs command
-        cmd = ["docker", "compose"]
-        
-        # Add compose files
-        for f in existing_files:
-            cmd.extend(["-f", str(compose_path / f)])
-        
-        cmd.append("logs")
+        cmd = ["docker", "compose", "-f", str(compose_file), "logs"]
         
         if follow:
             cmd.append("-f")
@@ -79,12 +53,12 @@ def run(
         if services:
             cmd.extend(services)
         
-        service_list = services if services else "all services"
+        service_list = ', '.join(services) if services else "all services"
         console.print(f"[dim]Viewing logs for {service_list}[/dim]")
         console.print("[dim]Press Ctrl+C to exit[/dim]\n")
         
         # Run the command directly (not capturing output)
-        subprocess.run(cmd, cwd=compose_path)
+        subprocess.run(cmd, cwd=compose_file.parent if compose_file.parent.name != '.' else Path.cwd())
         
     except subprocess.CalledProcessError as e:
         raise HomeLabError(f"Failed to view logs: {e}")

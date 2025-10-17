@@ -53,6 +53,62 @@ class VaultConfig(BaseModel):
     ui_enabled: bool = Field(default=True, description="Enable Vault UI")
 
 
+class NetworkingConfig(BaseModel):
+    """Networking services configuration"""
+    cloudflared: bool = Field(default=False, description="Enable Cloudflared tunnel")
+    headscale: bool = Field(default=False, description="Enable Headscale (Tailscale controller)")
+    pihole: bool = Field(default=False, description="Enable Pi-hole DNS")
+    
+
+class DatabaseConfig(BaseModel):
+    """Database services configuration"""
+    postgresql: bool = Field(default=True, description="Enable PostgreSQL")
+    mongodb: bool = Field(default=False, description="Enable MongoDB")
+    redis: bool = Field(default=True, description="Enable Redis")
+
+
+class BackupConfig(BaseModel):
+    """Backup services configuration"""
+    enabled: bool = Field(default=False, description="Enable backup services")
+    backrest: bool = Field(default=False, description="Enable Backrest for PostgreSQL")
+    restic: bool = Field(default=False, description="Enable Restic for file backups")
+    s3_endpoint: str = Field(default="", description="S3-compatible storage endpoint")
+    
+
+class PasswordManagerConfig(BaseModel):
+    """Password manager configuration"""
+    vaultwarden: bool = Field(default=False, description="Enable Vaultwarden (Bitwarden)")
+    
+
+class DashboardConfig(BaseModel):
+    """Dashboard and monitoring services"""
+    glance: bool = Field(default=False, description="Enable Glance dashboard")
+    uptime_kuma: bool = Field(default=False, description="Enable Uptime Kuma monitoring")
+    
+
+class DocumentationConfig(BaseModel):
+    """Documentation services"""
+    fumadocs: bool = Field(default=False, description="Enable Fumadocs documentation")
+    
+
+class AutomationConfig(BaseModel):
+    """Automation and workflow services"""
+    n8n: bool = Field(default=False, description="Enable n8n workflow automation")
+    
+
+class CIConfig(BaseModel):
+    """CI/CD services configuration"""
+    gitlab: bool = Field(default=False, description="Enable GitLab")
+    jenkins: bool = Field(default=False, description="Enable Jenkins")
+    
+
+class ProxyConfig(BaseModel):
+    """Proxy services configuration"""
+    traefik: bool = Field(default=True, description="Enable Traefik")
+    nginx_proxy_manager: bool = Field(default=False, description="Enable Nginx Proxy Manager")
+    caddy: bool = Field(default=False, description="Enable Caddy")
+
+
 class Config(BaseModel):
     """Main configuration class"""
     core: CoreConfig
@@ -61,6 +117,17 @@ class Config(BaseModel):
     gitlab: GitLabConfig = GitLabConfig()
     security: SecurityConfig = SecurityConfig()
     vault: VaultConfig = VaultConfig()
+    
+    # Infrastructure services
+    networking: NetworkingConfig = NetworkingConfig()
+    databases: DatabaseConfig = DatabaseConfig()
+    backups: BackupConfig = BackupConfig()
+    passwords: PasswordManagerConfig = PasswordManagerConfig()
+    dashboards: DashboardConfig = DashboardConfig()
+    documentation: DocumentationConfig = DocumentationConfig()
+    automation: AutomationConfig = AutomationConfig()
+    ci_cd: CIConfig = CIConfig()
+    proxy: ProxyConfig = ProxyConfig()
 
     @classmethod
     def load_from_file(cls, config_path: Path) -> "Config":
@@ -107,10 +174,32 @@ class Config(BaseModel):
     def get_service_urls(self) -> Dict[str, str]:
         """Get service URLs based on domain"""
         base_domain = self.core.domain
-        return {
+        urls = {
             "traefik": f"https://traefik.{base_domain}",
             "gitlab": f"https://gitlab.{base_domain}",
             "grafana": f"https://grafana.{base_domain}",
             "prometheus": f"https://prometheus.{base_domain}",
             "vault": f"https://vault.{base_domain}",
         }
+        
+        # Add URLs for enabled services
+        if self.networking.pihole:
+            urls["pihole"] = f"https://pihole.{base_domain}"
+        if self.networking.headscale:
+            urls["headscale"] = f"https://headscale.{base_domain}"
+        if self.passwords.vaultwarden:
+            urls["vaultwarden"] = f"https://vault.{base_domain}"
+        if self.dashboards.glance:
+            urls["glance"] = f"https://dashboard.{base_domain}"
+        if self.dashboards.uptime_kuma:
+            urls["uptime"] = f"https://uptime.{base_domain}"
+        if self.documentation.fumadocs:
+            urls["docs"] = f"https://docs.{base_domain}"
+        if self.automation.n8n:
+            urls["n8n"] = f"https://automation.{base_domain}"
+        if self.ci_cd.jenkins:
+            urls["jenkins"] = f"https://jenkins.{base_domain}"
+        if self.proxy.nginx_proxy_manager:
+            urls["npm"] = f"https://proxy.{base_domain}"
+            
+        return urls

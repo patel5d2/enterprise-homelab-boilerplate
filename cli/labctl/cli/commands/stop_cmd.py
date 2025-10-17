@@ -24,108 +24,97 @@ def run(
 ) -> None:
     """Stop services and optionally cleanup resources"""
     
-    config_path = Path(config_file)
-    if not config_path.exists():
-        raise HomeLabError(f"Configuration file not found: {config_file}")
+    console.print("🛑 [bold]Stopping Home Lab Services[/bold]")
     
-    # Load configuration
-    config = Config.load_from_file(config_path)
+    # Look for docker-compose.yml
+    compose_file = Path("docker-compose.yml")
+    if not compose_file.exists():
+        if compose_dir:
+            compose_file = Path(compose_dir) / "docker-compose.yml"
+        else:
+            compose_file = Path("compose/docker-compose.yml")
     
-    # Set compose directory
-    if compose_dir:
-        compose_path = Path(compose_dir)
-    else:
-        compose_path = config_path.parent / "compose"
-    
-    if not compose_path.exists():
-        console.print("[yellow]Compose directory not found[/yellow]")
+    if not compose_file.exists():
+        console.print("[yellow]Docker Compose file not found[/yellow]")
         return
-    
-    # Find compose files
-    compose_files = [
-        "docker-compose.yml",
-        "docker-compose.optional.yml",
-        "docker-compose.monitoring.yml",
-        "docker-compose.security.yml"
-    ]
-    
-    existing_files = [
-        f for f in compose_files 
-        if (compose_path / f).exists()
-    ]
-    
-    if not existing_files:
-        console.print("[yellow]No compose files found[/yellow]")
-        return
-    
-    console.print("🛑 Stopping home lab services...")
     
     try:
         with Progress() as progress:
-            task = progress.add_task("Stopping services...", total=len(existing_files))
+            stop_task = progress.add_task("Stopping services...", total=100)
             
-            # Stop services in reverse order (security, monitoring, optional, core)
-            for compose_file in reversed(existing_files):
-                progress.update(task, description=f"Stopping {compose_file}...")
-                _stop_compose_stack(compose_path, compose_file, services, remove_volumes)
-                progress.update(task, advance=1)
+            # Stop services
+            progress.update(stop_task, description="Stopping containers...")
+            _stop_services(compose_file, services)
+            progress.update(stop_task, advance=50)
             
+            # Remove volumes if requested
+            if remove_volumes:
+                progress.update(stop_task, description="Removing volumes...")
+                _remove_volumes(compose_file)
+                progress.update(stop_task, advance=30)
+            
+            # Remove images if requested
             if remove_images:
-                progress.update(task, description="Removing unused images...")
+                progress.update(stop_task, description="Removing unused images...")
                 _cleanup_images()
-                
-        console.print("\n[green]✅ Services stopped successfully![/green]")
+                progress.update(stop_task, advance=20)
+            
+        console.print(f"\n[green]✅ Services stopped successfully[/green]")
         
         if remove_volumes:
-            console.print("[yellow]⚠️ Volumes were removed - data may be lost[/yellow]")
-        
-        console.print("\n[dim]💡 Start services again with: labctl deploy[/dim]")
+            console.print("[yellow]⚠️  Volumes have been removed - data may be lost[/yellow]")
         
     except Exception as e:
-        raise HomeLabError(f"Stop failed: {str(e)}")
+        raise HomeLabError(f"Failed to stop services: {str(e)}")
 
 
-def _stop_compose_stack(
-    compose_path: Path,
-    compose_file: str,
-    services: Optional[List[str]],
-    remove_volumes: bool
-) -> None:
-    """Stop a specific compose stack"""
+def _stop_services(compose_file: Path, services: Optional[List[str]]) -> None:
+    """Stop Docker Compose services"""
     
-    compose_file_path = compose_path / compose_file
+    cmd = ["docker", "compose", "-f", str(compose_file), "down"]
     
-    cmd = [
-        "docker", "compose",
-        "-f", str(compose_file_path),
-        "down"
-    ]
-    
-    if remove_volumes:
-        cmd.append("--volumes")
-    
+    # Add specific services if provided
     if services:
-        # For specific services, use stop instead of down
-        cmd = [
-            "docker", "compose",
-            "-f", str(compose_file_path),
-            "stop"
-        ]
         cmd.extend(services)
     
     try:
         result = subprocess.run(
             cmd,
-            cwd=compose_path,
+            cwd=compose_file.parent if compose_file.parent.name != '.' else Path.cwd(),
             capture_output=True,
             text=True,
             check=True
         )
-        console.print(f"[dim]✓ Stopped {compose_file}[/dim]")
+        
+        if services:
+            console.print(f"[green]✓ Stopped services: {', '.join(services)}[/green]")
+        else:
+            console.print("[green]✓ Stopped all services[/green]")
+            
+    except subprocess.CalledProcessError as e:
+        error_output = e.stderr or e.stdout or "Unknown error"
+        console.print(f"[red]Failed to stop services: {error_output}[/red]")
+        raise
+
+
+def _remove_volumes(compose_file: Path) -> None:
+    """Remove volumes associated with the compose file"""
+    
+    cmd = ["docker", "compose", "-f", str(compose_file), "down", "-v"]
+    
+    try:
+        subprocess.run(
+            cmd,
+            cwd=compose_file.parent if compose_file.parent.name != '.' else Path.cwd(),
+            capture_output=True,
+            text=True,
+            check=True
+        )
+        console.print("[green]✓ Removed volumes[/green]")
         
     except subprocess.CalledProcessError as e:
-        error_msg = e.stderr or e.stdout or "Unknown error"
-        console.print(f"[yellow]Warning: Failed to stop {compose_file}: {error_msg[:50]}...[/yellow]")
+        error_output = e.stderr or e.stdout or "Unknown error"
+        console.print(f"[yellow]Warning: Failed to remove volumes: {error_output}[/yellow]")
 
 
 def _cleanup_images() -> None:
@@ -138,7 +127,7 @@ def _cleanup_images() -> None:
             text=True,
             check=True
         )
-        console.print("[dim]✓ Cleaned up unused images[/dim]")
+        console.print("[green]✓ Cleaned up unused images[/green]")
         
     except subprocess.CalledProcessError as e:
         console.print(f"[yellow]Warning: Failed to cleanup images: {e}[/yellow]")

@@ -9,9 +9,11 @@ from rich.console import Console
 from rich.prompt import Prompt, Confirm
 from rich.panel import Panel
 from rich.table import Table
+from rich.columns import Columns
 
-from ...core.config import Config, CoreConfig, ReverseProxyConfig, MonitoringConfig, GitLabConfig, SecurityConfig, VaultConfig
+from ...core.config import Config
 from ...core.exceptions import HomeLabError
+import yaml
 
 console = Console()
 
@@ -45,7 +47,12 @@ def run(
     
     # Save configuration
     try:
-        config.save_to_file(config_path)
+        if isinstance(config, dict):
+            # Save as YAML if it's a dict
+            with open(config_path, 'w') as f:
+                yaml.dump(config, f, default_flow_style=False, indent=2, sort_keys=False)
+        else:
+            config.save_to_file(config_path)
         console.print(f"\n[green]✅ Configuration saved to {config_file}[/green]")
         
         # Create directory structure
@@ -58,8 +65,8 @@ def run(
         raise HomeLabError(f"Failed to save configuration: {str(e)}")
 
 
-def _interactive_setup() -> Config:
-    """Interactive configuration setup"""
+def _interactive_setup():
+    """Interactive configuration setup with service selection"""
     
     console.print("\n[bold]📝 Core Configuration[/bold]")
     
@@ -79,93 +86,251 @@ def _interactive_setup() -> Config:
         default="UTC"
     )
     
-    core_config = CoreConfig(domain=domain, email=email, timezone=timezone)
+    # Interactive service selection
+    console.print("\n[bold]📦 Service Selection[/bold]")
+    console.print("Select which services you want to include in your home lab:")
     
-    console.print("\n[bold]🔀 Reverse Proxy Configuration[/bold]")
+    selected_services = _interactive_service_selection()
     
-    # Reverse proxy settings
-    reverse_proxy_provider = Prompt.ask(
-        "Reverse proxy provider",
-        choices=["traefik", "caddy", "nginx"],
-        default="traefik"
-    )
+    # Build configuration dict
+    config_data = {
+        "core": {
+            "domain": domain,
+            "email": email,
+            "timezone": timezone
+        },
+        "reverse_proxy": {
+            "provider": "traefik",
+            "ssl_provider": "letsencrypt",
+            "staging": False
+        },
+        "monitoring": {
+            "enabled": selected_services.get("monitoring", True),
+            "retention": "30d",
+            "prometheus_port": 9090,
+            "grafana_port": 3000
+        },
+        "gitlab": {
+            "enabled": selected_services.get("gitlab", False),
+            "runners": 3,
+            "registry": True,
+            "pages": True
+        },
+        "security": {
+            "enabled": True,
+            "vulnerability_scanning": True,
+            "compliance_reporting": True
+        },
+        "vault": {
+            "enabled": selected_services.get("vault", False),
+            "auto_unseal": True,
+            "ui_enabled": True
+        },
+        # Infrastructure services
+        "networking": {
+            "cloudflared": selected_services.get("cloudflared", False),
+            "headscale": selected_services.get("headscale", False),
+            "pihole": selected_services.get("pihole", False)
+        },
+        "databases": {
+            "postgresql": selected_services.get("postgresql", True),
+            "mongodb": selected_services.get("mongodb", False),
+            "redis": selected_services.get("redis", True)
+        },
+        "backups": {
+            "enabled": selected_services.get("backups", False),
+            "backrest": selected_services.get("backrest", False),
+            "restic": False,
+            "s3_endpoint": ""
+        },
+        "passwords": {
+            "vaultwarden": selected_services.get("vaultwarden", False)
+        },
+        "dashboards": {
+            "glance": selected_services.get("glance", False),
+            "uptime_kuma": selected_services.get("uptime_kuma", False)
+        },
+        "documentation": {
+            "fumadocs": selected_services.get("fumadocs", False)
+        },
+        "automation": {
+            "n8n": selected_services.get("n8n", False)
+        },
+        "ci_cd": {
+            "gitlab": selected_services.get("gitlab", False),
+            "jenkins": selected_services.get("jenkins", False)
+        },
+        "proxy": {
+            "traefik": True,  # Always enabled as default
+            "nginx_proxy_manager": selected_services.get("nginx_proxy_manager", False),
+            "caddy": selected_services.get("caddy", False)
+        }
+    }
     
-    ssl_staging = Confirm.ask(
-        "Use Let's Encrypt staging (for testing)?",
-        default=False
-    )
-    
-    reverse_proxy_config = ReverseProxyConfig(
-        provider=reverse_proxy_provider,
-        staging=ssl_staging
-    )
-    
-    console.print("\n[bold]🚀 Feature Selection[/bold]")
-    
-    # GitLab Enterprise
-    gitlab_enabled = Confirm.ask(
-        "🦊 Enable GitLab Enterprise Edition?",
-        default=True
-    )
-    
-    gitlab_config = GitLabConfig(enabled=gitlab_enabled)
-    if gitlab_enabled:
-        gitlab_config.runners = int(Prompt.ask(
-            "Number of GitLab runners",
-            default="3"
-        ))
-    
-    # Monitoring
-    monitoring_enabled = Confirm.ask(
-        "📊 Enable monitoring stack (Prometheus, Grafana)?",
-        default=True
-    )
-    
-    monitoring_config = MonitoringConfig(enabled=monitoring_enabled)
-    
-    # Security
-    security_enabled = Confirm.ask(
-        "🔒 Enable security features (Vault, scanning)?",
-        default=True
-    )
-    
-    security_config = SecurityConfig(enabled=security_enabled)
-    
-    # Vault
-    vault_enabled = Confirm.ask(
-        "🔐 Enable HashiCorp Vault?",
-        default=False
-    )
-    
-    vault_config = VaultConfig(enabled=vault_enabled)
-    
-    return Config(
-        core=core_config,
-        reverse_proxy=reverse_proxy_config,
-        monitoring=monitoring_config,
-        gitlab=gitlab_config,
-        security=security_config,
-        vault=vault_config
-    )
+    return config_data
 
 
-def _default_setup() -> Config:
+def _interactive_service_selection() -> dict:
+    """Interactive service selection with categories"""
+    
+    services = {
+        # Core services (always recommended)
+        "Core Services": {
+            "postgresql": {"name": "PostgreSQL", "desc": "Relational database", "default": True},
+            "redis": {"name": "Redis", "desc": "In-memory cache & message broker", "default": True},
+            "monitoring": {"name": "Monitoring Stack", "desc": "Prometheus + Grafana", "default": True}
+        },
+        
+        # Networking & DNS
+        "Networking & DNS": {
+            "pihole": {"name": "Pi-hole", "desc": "DNS ad-blocking and local DNS", "default": False},
+            "headscale": {"name": "Headscale", "desc": "Self-hosted Tailscale coordinator", "default": False},
+            "cloudflared": {"name": "Cloudflared", "desc": "Zero Trust tunnel", "default": False}
+        },
+        
+        # Security & Secrets
+        "Security & Secrets": {
+            "vaultwarden": {"name": "Vaultwarden", "desc": "Password manager (Bitwarden)", "default": False},
+            "vault": {"name": "HashiCorp Vault", "desc": "Enterprise secrets management", "default": False}
+        },
+        
+        # Dashboards & Monitoring  
+        "Dashboards & Monitoring": {
+            "glance": {"name": "Glance", "desc": "Home lab dashboard", "default": False},
+            "uptime_kuma": {"name": "Uptime Kuma", "desc": "Uptime monitoring", "default": False}
+        },
+        
+        # Development & CI/CD
+        "Development & CI/CD": {
+            "gitlab": {"name": "GitLab CE", "desc": "Git repository & CI/CD", "default": False},
+            "jenkins": {"name": "Jenkins", "desc": "CI/CD automation server", "default": False}
+        },
+        
+        # Databases & Storage
+        "Databases & Storage": {
+            "mongodb": {"name": "MongoDB", "desc": "Document database", "default": False},
+            "backups": {"name": "Backup Services", "desc": "Automated backups", "default": False},
+            "backrest": {"name": "pgBackRest", "desc": "PostgreSQL backup tool", "default": False}
+        },
+        
+        # Automation & Workflows
+        "Automation & Workflows": {
+            "n8n": {"name": "n8n", "desc": "Workflow automation", "default": False},
+            "fumadocs": {"name": "Fumadocs", "desc": "Documentation platform", "default": False}
+        },
+        
+        # Alternative Proxy Options
+        "Alternative Proxies": {
+            "nginx_proxy_manager": {"name": "Nginx Proxy Manager", "desc": "Web-based proxy manager", "default": False},
+            "caddy": {"name": "Caddy", "desc": "Modern web server with automatic HTTPS", "default": False}
+        }
+    }
+    
+    selected = {}
+    
+    for category, category_services in services.items():
+        console.print(f"\n[bold cyan]{category}:[/bold cyan]")
+        
+        for service_id, service_info in category_services.items():
+            default_choice = service_info["default"]
+            choice = Confirm.ask(
+                f"  {service_info['name']} - {service_info['desc']}",
+                default=default_choice
+            )
+            selected[service_id] = choice
+    
+    # Show summary
+    console.print("\n[bold green]Selected Services Summary:[/bold green]")
+    enabled_services = [k for k, v in selected.items() if v]
+    
+    if enabled_services:
+        for service in enabled_services:
+            console.print(f"  ✓ {service}")
+    else:
+        console.print("  Only core infrastructure (Traefik) will be installed")
+        
+    console.print(f"\nTotal services selected: [bold]{len(enabled_services)}[/bold]")
+    
+    return selected
+
+
+def _default_setup():
     """Default configuration setup"""
     
     console.print("[yellow]Using default configuration...[/yellow]")
     
-    return Config(
-        core=CoreConfig(
-            domain="homelab.local",
-            email="admin@example.com",
-            timezone="UTC"
-        ),
-        reverse_proxy=ReverseProxyConfig(),
-        monitoring=MonitoringConfig(enabled=True),
-        gitlab=GitLabConfig(enabled=True),
-        security=SecurityConfig(enabled=True),
-        vault=VaultConfig(enabled=False)
-    )
+    return {
+        "core": {
+            "domain": "homelab.local",
+            "email": "admin@homelab.local",
+            "timezone": "UTC"
+        },
+        "reverse_proxy": {
+            "provider": "traefik",
+            "ssl_provider": "letsencrypt",
+            "staging": False
+        },
+        "monitoring": {
+            "enabled": True,
+            "retention": "30d",
+            "prometheus_port": 9090,
+            "grafana_port": 3000
+        },
+        "gitlab": {
+            "enabled": False,
+            "runners": 3,
+            "registry": True,
+            "pages": True
+        },
+        "security": {
+            "enabled": True,
+            "vulnerability_scanning": True,
+            "compliance_reporting": True
+        },
+        "vault": {
+            "enabled": False,
+            "auto_unseal": True,
+            "ui_enabled": True
+        },
+        "networking": {
+            "cloudflared": False,
+            "headscale": False,
+            "pihole": True
+        },
+        "databases": {
+            "postgresql": True,
+            "mongodb": False,
+            "redis": True
+        },
+        "backups": {
+            "enabled": False,
+            "backrest": False,
+            "restic": False,
+            "s3_endpoint": ""
+        },
+        "passwords": {
+            "vaultwarden": True
+        },
+        "dashboards": {
+            "glance": True,
+            "uptime_kuma": True
+        },
+        "documentation": {
+            "fumadocs": False
+        },
+        "automation": {
+            "n8n": False
+        },
+        "ci_cd": {
+            "gitlab": False,
+            "jenkins": False
+        },
+        "proxy": {
+            "traefik": True,
+            "nginx_proxy_manager": False,
+            "caddy": False
+        }
+    }
 
 
 def _create_directories(base_path: Path) -> None:
@@ -187,7 +352,7 @@ def _create_directories(base_path: Path) -> None:
     console.print(f"[green]📁 Created directory structure in {base_path}[/green]")
 
 
-def _show_next_steps(config: Config) -> None:
+def _show_next_steps(config) -> None:
     """Show next steps after initialization"""
     
     console.print("\n[bold]🎯 Next Steps:[/bold]")
@@ -203,10 +368,26 @@ def _show_next_steps(config: Config) -> None:
     
     console.print(table)
     
-    # Service URLs
+    # Service URLs (simplified for dict config)
     console.print(f"\n[bold]🌐 Service URLs (after deployment):[/bold]")
-    urls = config.get_service_urls()
-    for service, url in urls.items():
+    domain = config.get('core', {}).get('domain', 'homelab.local')
+    base_urls = {
+        'traefik': f'https://traefik.{domain}',
+        'grafana': f'https://grafana.{domain}',
+        'prometheus': f'https://prometheus.{domain}'
+    }
+    
+    # Add conditional URLs based on enabled services
+    if config.get('passwords', {}).get('vaultwarden'):
+        base_urls['vaultwarden'] = f'https://vault.{domain}'
+    if config.get('dashboards', {}).get('glance'):
+        base_urls['glance'] = f'https://dashboard.{domain}'
+    if config.get('dashboards', {}).get('uptime_kuma'):
+        base_urls['uptime-kuma'] = f'https://uptime.{domain}'
+    if config.get('networking', {}).get('pihole'):
+        base_urls['pihole'] = f'https://pihole.{domain}'
+    
+    for service, url in base_urls.items():
         console.print(f"  • {service.title()}: {url}")
     
     console.print(f"\n[dim]💡 Edit configuration anytime with: labctl config --edit[/dim]")

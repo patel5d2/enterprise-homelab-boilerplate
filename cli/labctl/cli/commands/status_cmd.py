@@ -25,39 +25,21 @@ def run(
 ) -> None:
     """Show service status and health information"""
     
-    config_path = Path(config_file)
-    if not config_path.exists():
-        raise HomeLabError(f"Configuration file not found: {config_file}")
-    
-    # Load configuration
-    config = Config.load_from_file(config_path)
-    
-    # Set compose directory
-    if compose_dir:
-        compose_path = Path(compose_dir)
-    else:
-        compose_path = config_path.parent / "compose"
+    console.print("📊 [bold]Home Lab Service Status[/bold]")
     
     if watch:
         console.print("[yellow]Watch mode not implemented yet[/yellow]")
         return
     
     try:
-        # Get Docker Compose status
-        docker_status = _get_docker_status(compose_path, services)
-        
-        # Get health status (if services are accessible)
-        health_status = {}
-        if docker_status:  # Only check health if containers are running
-            try:
-                health_checker = HealthChecker(config)
-                health_status = health_checker.check_all()
-            except Exception:
-                pass  # Health checks may fail if services aren't ready
+        # Get Docker status
+        docker_status = _get_docker_status(None, services)
         
         # Display status information
-        _display_service_status(docker_status, health_status)
-        _display_system_info(config)
+        _display_service_status(docker_status, {})
+        
+        # Show basic system info
+        _display_basic_info(config_file)
         
     except Exception as e:
         raise HomeLabError(f"Status check failed: {str(e)}")
@@ -158,43 +140,42 @@ def _display_service_status(docker_status: Dict, health_status: Dict) -> None:
     console.print(table)
 
 
-def _display_system_info(config: Config) -> None:
-    """Display system information"""
+def _display_basic_info(config_file: str) -> None:
+    """Display basic system information"""
     
     info_items = []
     
-    # Domain info
-    info_items.append(f"🌐 Domain: {config.core.domain}")
+    # Configuration file
+    info_items.append(f"📄 Config File: {config_file}")
     
-    # Reverse proxy
-    info_items.append(f"🔀 Reverse Proxy: {config.reverse_proxy.provider}")
+    # Docker info
+    try:
+        result = subprocess.run(
+            ["docker", "version", "--format", "{{.Server.Version}}"],
+            capture_output=True, text=True, check=True
+        )
+        docker_version = result.stdout.strip()
+        info_items.append(f"🐳 Docker Version: {docker_version}")
+    except Exception:
+        info_items.append("🐳 Docker: Not available")
     
-    # Features status
-    features = []
-    if config.monitoring.enabled:
-        features.append("Monitoring")
-    if config.gitlab.enabled:
-        features.append("GitLab")
-    if config.security.enabled:
-        features.append("Security")
-    if config.vault.enabled:
-        features.append("Vault")
+    # Docker Compose info
+    try:
+        result = subprocess.run(
+            ["docker", "compose", "version", "--short"],
+            capture_output=True, text=True, check=True
+        )
+        compose_version = result.stdout.strip()
+        info_items.append(f"📦 Docker Compose: {compose_version}")
+    except Exception:
+        info_items.append("📦 Docker Compose: Not available")
     
-    if features:
-        info_items.append(f"⚡ Enabled Features: {', '.join(features)}")
-    else:
-        info_items.append("⚡ Enabled Features: Core only")
-    
-    # Service URLs
+    # Quick tips
     info_items.append("")
-    info_items.append("🔗 Service URLs:")
-    urls = config.get_service_urls()
-    for service, url in urls.items():
-        if (service == "gitlab" and config.gitlab.enabled) or \
-           (service == "vault" and config.vault.enabled) or \
-           (service in ["prometheus", "grafana"] and config.monitoring.enabled) or \
-           service == "traefik":
-            info_items.append(f"  • {service.title()}: {url}")
+    info_items.append("💡 Quick Commands:")
+    info_items.append("  • View logs: labctl logs")
+    info_items.append("  • Stop services: labctl stop")
+    info_items.append("  • Redeploy: labctl deploy")
     
     info_panel = Panel(
         "\n".join(info_items),

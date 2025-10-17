@@ -1,0 +1,70 @@
+core:
+  domain: "homelab.local"
+  email: "admin@homelab.local" 
+  timezone: "America/New_York"
+
+reverse_proxy:
+  provider: "traefik"
+  ssl_provider: "letsencrypt"
+  staging: false
+
+monitoring:
+  enabled: true
+  retention: "30d"
+  prometheus_port: 9090
+  grafana_port: 3000
+
+gitlab:
+  enabled: false
+  runners: 3
+  registry: true
+  pages: true
+
+security:
+  enabled: true
+  vulnerability_scanning: true
+  compliance_reporting: true
+
+vault:
+  enabled: false
+  auto_unseal: true
+  ui_enabled: true
+
+# Infrastructure services
+networking:
+  cloudflared: false
+  headscale: false
+  pihole: true
+
+databases:
+  postgresql: true
+  mongodb: false
+  redis: true
+
+backups:
+  enabled: false
+  backrest: false
+  restic: false
+  s3_endpoint: ""
+
+passwords:
+  vaultwarden: true
+
+dashboards:
+  glance: true
+  uptime_kuma: true
+
+documentation:
+  fumadocs: false
+
+automation:
+  n8n: false
+
+ci_cd:
+  gitlab: false
+  jenkins: false
+
+proxy:
+  traefik: true
+  nginx_proxy_manager: false
+  caddy: false

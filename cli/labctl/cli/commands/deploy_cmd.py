@@ -41,18 +41,19 @@ def run(
     if compose_dir:
         compose_path = Path(compose_dir)
     else:
-        compose_path = config_path.parent / "compose"
+        compose_path = config_path.parent
     
-    if not compose_path.exists():
-        raise HomeLabError(f"Compose directory not found: {compose_path}")
+    compose_file = compose_path / "docker-compose.yml"
+    if not compose_file.exists():
+        raise HomeLabError(f"Docker Compose file not found: {compose_file}. Run 'labctl build' first.")
     
     try:
         with Progress() as progress:
             deploy_task = progress.add_task("Deploying services...", total=100)
             
-            # Build compose files if requested
+            # Build compose file if requested
             if build:
-                progress.update(deploy_task, description="Building compose files...")
+                progress.update(deploy_task, description="Building compose file...")
                 _build_compose_files(config_file, compose_path)
                 progress.update(deploy_task, advance=20)
             
@@ -61,33 +62,17 @@ def run(
             _create_networks()
             progress.update(deploy_task, advance=10)
             
-            # Deploy core services
-            progress.update(deploy_task, description="Deploying core services...")
+            # Check for environment file
+            env_file = compose_path / ".env"
+            env_template = compose_path / ".env.template"
+            if not env_file.exists() and env_template.exists():
+                console.print("[yellow]⚠️  .env file not found. Copy .env.template to .env and configure it.[/yellow]")
+                progress.update(deploy_task, advance=5)
+            
+            # Deploy all services
+            progress.update(deploy_task, description="Deploying services...")
             _deploy_compose_stack(compose_path, "docker-compose.yml", services, detach)
-            progress.update(deploy_task, advance=30)
-            
-            # Deploy optional services
-            optional_file = compose_path / "docker-compose.optional.yml"
-            if optional_file.exists():
-                progress.update(deploy_task, description="Deploying optional services...")
-                _deploy_compose_stack(compose_path, "docker-compose.optional.yml", services, detach)
-                progress.update(deploy_task, advance=20)
-            
-            # Deploy monitoring
-            if config.monitoring.enabled:
-                monitoring_file = compose_path / "docker-compose.monitoring.yml"
-                if monitoring_file.exists():
-                    progress.update(deploy_task, description="Deploying monitoring...")
-                    _deploy_compose_stack(compose_path, "docker-compose.monitoring.yml", services, detach)
-                    progress.update(deploy_task, advance=10)
-            
-            # Deploy security
-            if config.security.enabled:
-                security_file = compose_path / "docker-compose.security.yml"
-                if security_file.exists():
-                    progress.update(deploy_task, description="Deploying security services...")
-                    _deploy_compose_stack(compose_path, "docker-compose.security.yml", services, detach)
-                    progress.update(deploy_task, advance=5)
+            progress.update(deploy_task, advance=60)
             
             # Wait for services to be healthy
             if wait:
@@ -110,7 +95,7 @@ def _build_compose_files(config_file: str, compose_path: Path) -> None:
 
 def _create_networks() -> None:
     """Create Docker networks if they don't exist"""
-    networks = ["public", "internal"]
+    networks = ["traefik"]
     
     for network in networks:
         try:
@@ -123,21 +108,15 @@ def _create_networks() -> None:
             
             if result.returncode != 0:
                 # Create network
-                if network == "internal":
-                    subprocess.run(
-                        ["docker", "network", "create", "--internal", network],
-                        capture_output=True,
-                        text=True,
-                        check=True
-                    )
-                else:
-                    subprocess.run(
-                        ["docker", "network", "create", network],
-                        capture_output=True,
-                        text=True,
-                        check=True
-                    )
+                subprocess.run(
+                    ["docker", "network", "create", network],
+                    capture_output=True,
+                    text=True,
+                    check=True
+                )
                 console.print(f"[dim]✓ Created network: {network}[/dim]")
+            else:
+                console.print(f"[dim]✓ Network already exists: {network}[/dim]")
         
         except subprocess.CalledProcessError as e:
             console.print(f"[yellow]Warning: Failed to create network {network}: {e}[/yellow]")
@@ -206,10 +185,14 @@ def _wait_for_services(config: Config, timeout: int) -> None:
             
             # Check if key services are running
             required_services = ['traefik']
-            if config.gitlab.enabled:
+            if config.gitlab.enabled or config.ci_cd.gitlab:
                 required_services.append('gitlab')
             if config.monitoring.enabled:
                 required_services.extend(['prometheus', 'grafana'])
+            if config.databases.postgresql:
+                required_services.append('postgres')
+            if config.passwords.vaultwarden:
+                required_services.append('vaultwarden')
             
             all_running = True
             for service in required_services:
@@ -236,11 +219,7 @@ def _show_deployment_info(config: Config, compose_path: Path) -> None:
     
     urls = config.get_service_urls()
     for service, url in urls.items():
-        if (service == "gitlab" and config.gitlab.enabled) or \
-           (service == "vault" and config.vault.enabled) or \
-           (service in ["prometheus", "grafana"] and config.monitoring.enabled) or \
-           service == "traefik":
-            console.print(f"  • {service.title()}: {url}")
+        console.print(f"  • {service.title()}: {url}")
     
     console.print(f"\n[bold]📁 Management:[/bold]")
     console.print(f"  • Check status: [cyan]labctl status[/cyan]")

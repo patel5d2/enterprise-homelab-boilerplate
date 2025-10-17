@@ -1,0 +1,47 @@
+pages:
+  - name: Home Lab Dashboard
+    columns:
+      - size: small
+        widgets:
+          - type: clock
+            hour-format: 24h
+            timezones:
+              - timezone: America/New_York
+                label: Eastern Time
+              - timezone: UTC
+                label: UTC
+
+          - type: weather
+            location: New York, NY
+
+      - size: full
+        widgets:
+          - type: monitor
+            cache: 1m
+            sites:
+              - title: Traefik
+                url: https://traefik.homelab.local
+                icon: si:traefik
+
+              - title: Grafana
+                url: https://grafana.homelab.local
+                icon: si:grafana
+
+              - title: Prometheus
+                url: https://prometheus.homelab.local
+                icon: si:prometheus
+
+              - title: Vaultwarden
+                url: https://vault.homelab.local
+                icon: si:bitwarden
+
+              - title: Pi-hole
+                url: https://pihole.homelab.local
+                icon: si:pihole
+
+              - title: Uptime Kuma
+                url: https://uptime.homelab.local
+                icon: si:uptimekuma
+
+          - type: docker
+            host: unix:///var/run/docker.sock
