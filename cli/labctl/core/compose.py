@@ -21,6 +21,20 @@ class ComposeGenerator:
         }
         self.volumes = {}
     
+    def _secure_traefik_labels(self, name: str, subdomain: str, port: Optional[int] = None) -> List[str]:
+        """Generate consistent Traefik labels with HTTPS, TLS, and security headers"""
+        labels = [
+            "traefik.enable=true",
+            "traefik.docker.network=traefik",
+            f"traefik.http.routers.{name}.rule=Host(`{subdomain}.{self.config.core.domain}`)",
+            f"traefik.http.routers.{name}.entrypoints=websecure",
+            f"traefik.http.routers.{name}.tls.certresolver=letsencrypt",
+            f"traefik.http.routers.{name}.middlewares=secure-headers@docker"
+        ]
+        if port is not None:
+            labels.append(f"traefik.http.services.{name}.loadbalancer.server.port={port}")
+        return labels
+    
     def generate_compose(self) -> Dict[str, Any]:
         """Generate complete docker-compose configuration"""
         # Core infrastructure services
@@ -61,7 +75,7 @@ class ComposeGenerator:
             "restart": "unless-stopped",
             "command": [
                 "--api.dashboard=true",
-                "--api.insecure=true",
+                "--api.insecure=false",
                 "--providers.docker=true",
                 "--providers.docker.exposedbydefault=false",
                 "--entrypoints.web.address=:80",
@@ -72,8 +86,7 @@ class ComposeGenerator:
             ],
             "ports": [
                 "80:80",
-                "443:443",
-                "8080:8080"
+                "443:443"
             ],
             "volumes": [
                 "/var/run/docker.sock:/var/run/docker.sock:ro",
@@ -81,8 +94,29 @@ class ComposeGenerator:
             ],
             "labels": [
                 "traefik.enable=true",
+                "traefik.docker.network=traefik",
+                # Global HTTP -> HTTPS redirect (catch-all)
+                "traefik.http.middlewares.redirect-to-https.redirectscheme.scheme=https",
+                "traefik.http.routers.http-catchall.rule=HostRegexp(`{host:.+}`)",
+                "traefik.http.routers.http-catchall.entrypoints=web",
+                "traefik.http.routers.http-catchall.middlewares=redirect-to-https@docker",
+                # Security headers middleware
+                "traefik.http.middlewares.secure-headers.headers.forceSTSHeader=true",
+                "traefik.http.middlewares.secure-headers.headers.stsSeconds=31536000",
+                "traefik.http.middlewares.secure-headers.headers.stsIncludeSubdomains=true",
+                "traefik.http.middlewares.secure-headers.headers.stsPreload=true",
+                "traefik.http.middlewares.secure-headers.headers.browserXssFilter=true",
+                "traefik.http.middlewares.secure-headers.headers.contentTypeNosniff=true",
+                "traefik.http.middlewares.secure-headers.headers.frameDeny=true",
+                "traefik.http.middlewares.secure-headers.headers.referrerPolicy=no-referrer-when-downgrade",
+                # Basic auth for Traefik dashboard
+                "traefik.http.middlewares.dashboard-auth.basicauth.users=${TRAEFIK_DASHBOARD_USERS}",
+                # Traefik dashboard Router over HTTPS to api@internal
                 f"traefik.http.routers.traefik.rule=Host(`traefik.{self.config.core.domain}`)",
-                "traefik.http.routers.traefik.tls.certresolver=letsencrypt"
+                "traefik.http.routers.traefik.entrypoints=websecure",
+                "traefik.http.routers.traefik.tls.certresolver=letsencrypt",
+                "traefik.http.routers.traefik.service=api@internal",
+                "traefik.http.routers.traefik.middlewares=dashboard-auth@docker,secure-headers@docker"
             ],
             "networks": ["traefik"]
         }
@@ -180,12 +214,7 @@ class ComposeGenerator:
                 "./prometheus.yml:/etc/prometheus/prometheus.yml",
                 "prometheus-data:/prometheus"
             ],
-            "labels": [
-                "traefik.enable=true",
-                f"traefik.http.routers.prometheus.rule=Host(`prometheus.{self.config.core.domain}`)",
-                "traefik.http.routers.prometheus.tls.certresolver=letsencrypt",
-                f"traefik.http.services.prometheus.loadbalancer.server.port={self.config.monitoring.prometheus_port}"
-            ],
+            "labels": self._secure_traefik_labels("prometheus", "prometheus", self.config.monitoring.prometheus_port),
             "networks": ["traefik"]
         }
         
@@ -202,12 +231,7 @@ class ComposeGenerator:
             "volumes": [
                 "grafana-data:/var/lib/grafana"
             ],
-            "labels": [
-                "traefik.enable=true",
-                f"traefik.http.routers.grafana.rule=Host(`grafana.{self.config.core.domain}`)",
-                "traefik.http.routers.grafana.tls.certresolver=letsencrypt",
-                f"traefik.http.services.grafana.loadbalancer.server.port={self.config.monitoring.grafana_port}"
-            ],
+            "labels": self._secure_traefik_labels("grafana", "grafana", self.config.monitoring.grafana_port),
             "depends_on": ["prometheus"],
             "networks": ["traefik"]
         }
@@ -271,10 +295,11 @@ class ComposeGenerator:
                 "image": "cloudflare/cloudflared:latest",
                 "container_name": "cloudflared",
                 "restart": "unless-stopped",
-                "command": "tunnel --no-autoupdate run",
+                "command": "tunnel --no-autoupdate run --metrics 0.0.0.0:8080",
                 "environment": [
                     "TUNNEL_TOKEN=${CLOUDFLARE_TUNNEL_TOKEN}"
                 ],
+                "labels": self._secure_traefik_labels("cloudflared", "cloudflared", 8080),
                 "networks": ["traefik"]
             }
         
@@ -291,12 +316,7 @@ class ComposeGenerator:
                     "./headscale:/etc/headscale",
                     "headscale-data:/var/lib/headscale"
                 ],
-                "labels": [
-                    "traefik.enable=true",
-                    f"traefik.http.routers.headscale.rule=Host(`headscale.{self.config.core.domain}`)",
-                    "traefik.http.routers.headscale.tls.certresolver=letsencrypt",
-                    "traefik.http.services.headscale.loadbalancer.server.port=8080"
-                ],
+                "labels": self._secure_traefik_labels("headscale", "headscale", 8080),
                 "networks": ["traefik"]
             }
             self.volumes["headscale-data"] = None
@@ -319,12 +339,7 @@ class ComposeGenerator:
                     "53:53/tcp",
                     "53:53/udp"
                 ],
-                "labels": [
-                    "traefik.enable=true",
-                    f"traefik.http.routers.pihole.rule=Host(`pihole.{self.config.core.domain}`)",
-                    "traefik.http.routers.pihole.tls.certresolver=letsencrypt",
-                    "traefik.http.services.pihole.loadbalancer.server.port=80"
-                ],
+                "labels": self._secure_traefik_labels("pihole", "pihole", 80),
                 "networks": ["traefik"]
             }
             self.volumes.update({
@@ -336,7 +351,7 @@ class ComposeGenerator:
         """Add security services"""
         if self.config.vault.enabled:
             self.services["vault"] = {
-                "image": "vault:latest",
+                "image": "hashicorp/vault:latest",
                 "container_name": "vault",
                 "restart": "unless-stopped",
                 "cap_add": ["IPC_LOCK"],
@@ -347,12 +362,7 @@ class ComposeGenerator:
                 "volumes": [
                     "vault-data:/vault/data"
                 ],
-                "labels": [
-                    "traefik.enable=true",
-                    f"traefik.http.routers.vault.rule=Host(`vault.{self.config.core.domain}`)",
-                    "traefik.http.routers.vault.tls.certresolver=letsencrypt",
-                    "traefik.http.services.vault.loadbalancer.server.port=8200"
-                ],
+                "labels": self._secure_traefik_labels("vault", "vault", 8200),
                 "networks": ["traefik"]
             }
             self.volumes["vault-data"] = None
@@ -370,12 +380,7 @@ class ComposeGenerator:
                 "volumes": [
                     "vaultwarden-data:/data"
                 ],
-                "labels": [
-                    "traefik.enable=true",
-                    f"traefik.http.routers.vaultwarden.rule=Host(`vault.{self.config.core.domain}`)",
-                    "traefik.http.routers.vaultwarden.tls.certresolver=letsencrypt",
-                    "traefik.http.services.vaultwarden.loadbalancer.server.port=80"
-                ],
+                "labels": self._secure_traefik_labels("vaultwarden", "vault", 80),
                 "networks": ["traefik"]
             }
             self.volumes["vaultwarden-data"] = None
@@ -413,12 +418,7 @@ class ComposeGenerator:
                     "./glance.yml:/app/glance.yml",
                     "glance-data:/app/data"
                 ],
-                "labels": [
-                    "traefik.enable=true",
-                    f"traefik.http.routers.glance.rule=Host(`dashboard.{self.config.core.domain}`)",
-                    "traefik.http.routers.glance.tls.certresolver=letsencrypt",
-                    "traefik.http.services.glance.loadbalancer.server.port=8080"
-                ],
+                "labels": self._secure_traefik_labels("glance", "dashboard", 8080),
                 "networks": ["traefik"]
             }
             self.volumes["glance-data"] = None
@@ -431,12 +431,7 @@ class ComposeGenerator:
                 "volumes": [
                     "uptime-kuma-data:/app/data"
                 ],
-                "labels": [
-                    "traefik.enable=true",
-                    f"traefik.http.routers.uptime-kuma.rule=Host(`uptime.{self.config.core.domain}`)",
-                    "traefik.http.routers.uptime-kuma.tls.certresolver=letsencrypt",
-                    "traefik.http.services.uptime-kuma.loadbalancer.server.port=3001"
-                ],
+                "labels": self._secure_traefik_labels("uptime-kuma", "uptime", 3001),
                 "networks": ["traefik"]
             }
             self.volumes["uptime-kuma-data"] = None
@@ -454,12 +449,7 @@ class ComposeGenerator:
                     "./docs:/app",
                     "fumadocs-modules:/app/node_modules"
                 ],
-                "labels": [
-                    "traefik.enable=true",
-                    f"traefik.http.routers.fumadocs.rule=Host(`docs.{self.config.core.domain}`)",
-                    "traefik.http.routers.fumadocs.tls.certresolver=letsencrypt",
-                    "traefik.http.services.fumadocs.loadbalancer.server.port=3000"
-                ],
+                "labels": self._secure_traefik_labels("fumadocs", "docs", 3000),
                 "networks": ["traefik"]
             }
             self.volumes["fumadocs-modules"] = None
@@ -479,12 +469,7 @@ class ComposeGenerator:
                 "volumes": [
                     "n8n-data:/home/node/.n8n"
                 ],
-                "labels": [
-                    "traefik.enable=true",
-                    f"traefik.http.routers.n8n.rule=Host(`automation.{self.config.core.domain}`)",
-                    "traefik.http.routers.n8n.tls.certresolver=letsencrypt",
-                    "traefik.http.services.n8n.loadbalancer.server.port=5678"
-                ],
+                "labels": self._secure_traefik_labels("n8n", "automation", 5678),
                 "networks": ["traefik"]
             }
             self.volumes["n8n-data"] = None
@@ -506,12 +491,7 @@ class ComposeGenerator:
                     "gitlab-data:/var/opt/gitlab"
                 ],
                 "shm_size": "256m",
-                "labels": [
-                    "traefik.enable=true",
-                    f"traefik.http.routers.gitlab.rule=Host(`gitlab.{self.config.core.domain}`)",
-                    "traefik.http.routers.gitlab.tls.certresolver=letsencrypt",
-                    "traefik.http.services.gitlab.loadbalancer.server.port=80"
-                ],
+                "labels": self._secure_traefik_labels("gitlab", "gitlab", 80),
                 "networks": ["traefik"]
             }
             self.volumes.update({
@@ -533,12 +513,7 @@ class ComposeGenerator:
                     "jenkins-data:/var/jenkins_home",
                     "/var/run/docker.sock:/var/run/docker.sock"
                 ],
-                "labels": [
-                    "traefik.enable=true",
-                    f"traefik.http.routers.jenkins.rule=Host(`jenkins.{self.config.core.domain}`)",
-                    "traefik.http.routers.jenkins.tls.certresolver=letsencrypt",
-                    "traefik.http.services.jenkins.loadbalancer.server.port=8080"
-                ],
+                "labels": self._secure_traefik_labels("jenkins", "jenkins", 8080),
                 "networks": ["traefik"]
             }
             self.volumes["jenkins-data"] = None
@@ -558,6 +533,7 @@ class ComposeGenerator:
             "BACKUP_S3_BUCKET": "your-backup-bucket",
             "BACKUP_S3_KEY": "your-s3-access-key",
             "BACKUP_S3_SECRET": "your-s3-secret-key",
+            "TRAEFIK_DASHBOARD_USERS": "admin:$$apr1$$replace_me$$hash_goes_here",
             "TZ": self.config.core.timezone
         }
         return env_vars
