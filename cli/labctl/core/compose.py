@@ -35,6 +35,114 @@ class ComposeGenerator:
             labels.append(f"traefik.http.services.{name}.loadbalancer.server.port={port}")
         return labels
     
+    def _merge_environment_variables(self, service_name: str, default_env: List[str]) -> List[str]:
+        """Merge default environment variables with custom ones for a service"""
+        # Convert default env list to dict for easier merging
+        env_dict = {}
+        for env_var in default_env:
+            if "=" in env_var:
+                key, value = env_var.split("=", 1)
+                env_dict[key] = value
+            else:
+                # Handle environment variables without values (like for docker secrets)
+                env_dict[env_var] = ""
+        
+        # Add custom environment variables (they override defaults)
+        custom_vars = {}
+        if hasattr(self.config, 'custom_env') and self.config.custom_env.has_custom_vars(service_name):
+            # Config object case
+            custom_vars = self.config.custom_env.get_service_vars(service_name)
+        elif isinstance(self.config, dict) and 'custom_env' in self.config:
+            # Dict-based config case (from init command)
+            custom_env_data = self.config.get('custom_env', {})
+            variables = custom_env_data.get('variables', {})
+            custom_vars = variables.get(service_name, {})
+        
+        if custom_vars:
+            env_dict.update(custom_vars)
+        
+        # Convert back to list format
+        result = []
+        for key, value in env_dict.items():
+            if value:  # Only add =value if there is a value
+                result.append(f"{key}={value}")
+            else:
+                result.append(key)
+        
+        return result
+    
+    def _merge_environment_variables(self, service_name: str, default_env: List[str]) -> List[str]:
+        """Merge default environment variables with custom ones for a service"""
+        # Convert default env list to dict for easier merging
+        env_dict = {}
+        for env_var in default_env:
+            if "=" in env_var:
+                key, value = env_var.split("=", 1)
+                env_dict[key] = value
+            else:
+                # Handle environment variables without values (like for docker secrets)
+                env_dict[env_var] = ""
+        
+        # Add custom environment variables (they override defaults)
+        custom_vars = {}
+        if hasattr(self.config, 'custom_env') and self.config.custom_env.has_custom_vars(service_name):
+            # Config object case
+            custom_vars = self.config.custom_env.get_service_vars(service_name)
+        elif isinstance(self.config, dict) and 'custom_env' in self.config:
+            # Dict-based config case (from init command)
+            custom_env_data = self.config.get('custom_env', {})
+            variables = custom_env_data.get('variables', {})
+            custom_vars = variables.get(service_name, {})
+        
+        if custom_vars:
+            env_dict.update(custom_vars)
+        
+        # Convert back to list format
+        result = []
+        for key, value in env_dict.items():
+            if value:  # Only add =value if there is a value
+                result.append(f"{key}={value}")
+            else:
+                result.append(key)
+        
+        return result
+    
+    def save_compose_file(self, file_path: Path) -> None:
+        """Save Docker Compose configuration to file"""
+        compose_config = self.generate_compose()
+        
+        with open(file_path, 'w') as f:
+            yaml.dump(compose_config, f, default_flow_style=False, indent=2, sort_keys=False)
+    
+    def save_env_template(self, file_path: Path) -> None:
+        """Save environment template file"""
+        env_template = [
+            "# Home Lab Environment Variables Template",
+            "# Copy this file to .env and update the values",
+            "# DO NOT COMMIT .env TO VERSION CONTROL",
+            "",
+            "# Timezone",
+            "TZ=UTC",
+            "",
+            "# Traefik Dashboard Authentication (generate with: htpasswd -nb admin password)",
+            "TRAEFIK_DASHBOARD_USERS=admin:$2y$10$example_hash_here",
+            "",
+            "# Vaultwarden Admin Token (generate with: openssl rand -hex 32)", 
+            "VAULTWARDEN_ADMIN_TOKEN=your_secure_token_here",
+            "",
+            "# Cloudflare Tunnel Token (if using Cloudflared)",
+            "CLOUDFLARE_TUNNEL_TOKEN=your_tunnel_token_here",
+            "",
+            "# Backup Configuration (if using backups)",
+            "BACKUP_S3_BUCKET=your-backup-bucket",
+            "BACKUP_S3_KEY=your-s3-access-key",
+            "BACKUP_S3_SECRET=your-s3-secret-key",
+            ""
+        ]
+        
+        with open(file_path, 'w') as f:
+            f.write("\n".join(env_template))
+    
     def generate_compose(self) -> Dict[str, Any]:
         """Generate complete docker-compose configuration"""
         # Core infrastructure services
@@ -244,15 +352,16 @@ class ComposeGenerator:
     def _add_database_services(self):
         """Add database services"""
         if self.config.databases.postgresql:
+            default_env = [
+                "POSTGRES_DB=homelab",
+                "POSTGRES_USER=homelab",
+                "POSTGRES_PASSWORD=homelab123"
+            ]
             self.services["postgres"] = {
                 "image": "postgres:16",
                 "container_name": "postgres",
                 "restart": "unless-stopped",
-                "environment": [
-                    "POSTGRES_DB=homelab",
-                    "POSTGRES_USER=homelab",
-                    "POSTGRES_PASSWORD=homelab123"
-                ],
+                "environment": self._merge_environment_variables("postgresql", default_env),
                 "volumes": [
                     "postgres-data:/var/lib/postgresql/data"
                 ],
@@ -261,14 +370,15 @@ class ComposeGenerator:
             self.volumes["postgres-data"] = None
         
         if self.config.databases.mongodb:
+            default_env = [
+                "MONGO_INITDB_ROOT_USERNAME=admin",
+                "MONGO_INITDB_ROOT_PASSWORD=admin123"
+            ]
             self.services["mongodb"] = {
                 "image": "mongo:7",
                 "container_name": "mongodb",
                 "restart": "unless-stopped",
-                "environment": [
-                    "MONGO_INITDB_ROOT_USERNAME=admin",
-                    "MONGO_INITDB_ROOT_PASSWORD=admin123"
-                ],
+                "environment": self._merge_environment_variables("mongodb", default_env),
                 "volumes": [
                     "mongodb-data:/data/db"
                 ],
@@ -322,15 +432,16 @@ class ComposeGenerator:
             self.volumes["headscale-data"] = None
         
         if self.config.networking.pihole:
+            default_env = [
+                "TZ=${TZ:-UTC}",
+                "WEBPASSWORD=admin123",
+                "DNSMASQ_LISTENING=all"
+            ]
             self.services["pihole"] = {
                 "image": "pihole/pihole:latest",
                 "container_name": "pihole",
                 "restart": "unless-stopped",
-                "environment": [
-                    "TZ=${TZ:-UTC}",
-                    "WEBPASSWORD=admin123",
-                    "DNSMASQ_LISTENING=all"
-                ],
+                "environment": self._merge_environment_variables("pihole", default_env),
                 "volumes": [
                     "pihole-data:/etc/pihole",
                     "pihole-dnsmasq:/etc/dnsmasq.d"
@@ -368,15 +479,16 @@ class ComposeGenerator:
             self.volumes["vault-data"] = None
         
         if self.config.passwords.vaultwarden:
+            default_env = [
+                f"DOMAIN=https://vault.{self.config.core.domain}",
+                "SIGNUPS_ALLOWED=false",
+                "ADMIN_TOKEN=${VAULTWARDEN_ADMIN_TOKEN}"
+            ]
             self.services["vaultwarden"] = {
                 "image": "vaultwarden/server:latest",
                 "container_name": "vaultwarden",
                 "restart": "unless-stopped",
-                "environment": [
-                    f"DOMAIN=https://vault.{self.config.core.domain}",
-                    "SIGNUPS_ALLOWED=false",
-                    "ADMIN_TOKEN=${VAULTWARDEN_ADMIN_TOKEN}"
-                ],
+                "environment": self._merge_environment_variables("vaultwarden", default_env),
                 "volumes": [
                     "vaultwarden-data:/data"
                 ],
@@ -394,26 +506,32 @@ class ComposeGenerator:
                 "restart": "unless-stopped",
                 "environment": [
                     "PGBACKREST_REPO1_TYPE=s3",
-                    f"PGBACKREST_REPO1_S3_ENDPOINT={self.config.backups.s3_endpoint}",
+                    f"PGBACKREST_REPO1_S3_ENDPOINT={getattr(self.config.backups, 's3_endpoint', '')}",
                     "PGBACKREST_REPO1_S3_BUCKET=${BACKUP_S3_BUCKET}",
                     "PGBACKREST_REPO1_S3_KEY=${BACKUP_S3_KEY}",
                     "PGBACKREST_REPO1_S3_KEY_SECRET=${BACKUP_S3_SECRET}"
                 ],
                 "volumes": [
-                    "pgbackrest-config:/etc/pgbackrest"
+                    "pgbackrest-config:/etc/pgbackrest",
+                    "pgbackrest-spool:/var/spool/pgbackrest"
                 ],
-                "depends_on": ["postgres"],
                 "networks": ["traefik"]
             }
-            self.volumes["pgbackrest-config"] = None
+            self.volumes.update({
+                "pgbackrest-config": None,
+                "pgbackrest-spool": None
+            })
     
     def _add_dashboard_services(self):
         """Add dashboard services"""
-        if self.config.dashboards.glance:
+        if getattr(self.config, 'dashboards', None) and getattr(self.config.dashboards, 'glance', False):
             self.services["glance"] = {
                 "image": "glanceapp/glance:latest",
                 "container_name": "glance",
                 "restart": "unless-stopped",
+                "environment": [
+                    f"GLANCE_DOMAIN=dashboard.{self.config.core.domain}"
+                ],
                 "volumes": [
                     "./glance.yml:/app/glance.yml",
                     "glance-data:/app/data"
@@ -423,49 +541,47 @@ class ComposeGenerator:
             }
             self.volumes["glance-data"] = None
         
-        if self.config.dashboards.uptime_kuma:
+        if getattr(self.config, 'dashboards', None) and getattr(self.config.dashboards, 'uptime_kuma', False):
             self.services["uptime-kuma"] = {
                 "image": "louislam/uptime-kuma:1",
                 "container_name": "uptime-kuma",
                 "restart": "unless-stopped",
                 "volumes": [
-                    "uptime-kuma-data:/app/data"
+                    "uptime-kuma:/app/data"
                 ],
                 "labels": self._secure_traefik_labels("uptime-kuma", "uptime", 3001),
                 "networks": ["traefik"]
             }
-            self.volumes["uptime-kuma-data"] = None
+            self.volumes["uptime-kuma"] = None
     
     def _add_documentation_services(self):
         """Add documentation services"""
-        if self.config.documentation.fumadocs:
+        if getattr(self.config, 'documentation', None) and getattr(self.config.documentation, 'fumadocs', False):
             self.services["fumadocs"] = {
-                "image": "node:18-alpine",
+                "image": "fumadocs/fumadocs:latest", 
                 "container_name": "fumadocs",
                 "restart": "unless-stopped",
-                "working_dir": "/app",
-                "command": "npm run start",
                 "volumes": [
-                    "./docs:/app",
-                    "fumadocs-modules:/app/node_modules"
+                    "fumadocs-data:/app/data"
                 ],
                 "labels": self._secure_traefik_labels("fumadocs", "docs", 3000),
                 "networks": ["traefik"]
             }
-            self.volumes["fumadocs-modules"] = None
+            self.volumes["fumadocs-data"] = None
     
     def _add_automation_services(self):
         """Add automation services"""
-        if self.config.automation.n8n:
+        if getattr(self.config, 'automation', None) and getattr(self.config.automation, 'n8n', False):
+            default_env = [
+                f"WEBHOOK_URL=https://automation.{self.config.core.domain}",
+                "N8N_HOST=0.0.0.0",
+                "N8N_PORT=5678"
+            ]
             self.services["n8n"] = {
-                "image": "n8nio/n8n:latest",
+                "image": "docker.n8n.io/n8nio/n8n",
                 "container_name": "n8n",
                 "restart": "unless-stopped",
-                "environment": [
-                    f"WEBHOOK_URL=https://automation.{self.config.core.domain}",
-                    "GENERIC_TIMEZONE=${TZ:-UTC}",
-                    "N8N_SECURE_COOKIE=false"
-                ],
+                "environment": self._merge_environment_variables("n8n", default_env),
                 "volumes": [
                     "n8n-data:/home/node/.n8n"
                 ],
@@ -476,9 +592,9 @@ class ComposeGenerator:
     
     def _add_cicd_services(self):
         """Add CI/CD services"""
-        if self.config.gitlab.enabled or self.config.ci_cd.gitlab:
+        if getattr(self.config, 'ci_cd', None) and getattr(self.config.ci_cd, 'gitlab', False):
             self.services["gitlab"] = {
-                "image": "gitlab/gitlab-ee:latest",
+                "image": "gitlab/gitlab-ce:latest",
                 "container_name": "gitlab",
                 "restart": "unless-stopped",
                 "hostname": f"gitlab.{self.config.core.domain}",
@@ -487,10 +603,9 @@ class ComposeGenerator:
                 ],
                 "volumes": [
                     "gitlab-config:/etc/gitlab",
-                    "gitlab-logs:/var/log/gitlab",
+                    "gitlab-logs:/var/log/gitlab", 
                     "gitlab-data:/var/opt/gitlab"
                 ],
-                "shm_size": "256m",
                 "labels": self._secure_traefik_labels("gitlab", "gitlab", 80),
                 "networks": ["traefik"]
             }
@@ -500,7 +615,7 @@ class ComposeGenerator:
                 "gitlab-data": None
             })
         
-        if self.config.ci_cd.jenkins:
+        if getattr(self.config, 'ci_cd', None) and getattr(self.config.ci_cd, 'jenkins', False):
             self.services["jenkins"] = {
                 "image": "jenkins/jenkins:lts",
                 "container_name": "jenkins",
@@ -517,30 +632,6 @@ class ComposeGenerator:
                 "networks": ["traefik"]
             }
             self.volumes["jenkins-data"] = None
-    
-    def save_compose_file(self, output_path: Path):
-        """Save the generated compose configuration to a file"""
-        compose_config = self.generate_compose()
-        
-        with open(output_path, 'w') as f:
-            yaml.dump(compose_config, f, default_flow_style=False, indent=2, sort_keys=False)
-    
-    def generate_env_template(self) -> Dict[str, str]:
-        """Generate environment variable template"""
-        env_vars = {
-            "CLOUDFLARE_TUNNEL_TOKEN": "your-cloudflare-tunnel-token",
-            "VAULTWARDEN_ADMIN_TOKEN": "your-vaultwarden-admin-token",
-            "BACKUP_S3_BUCKET": "your-backup-bucket",
-            "BACKUP_S3_KEY": "your-s3-access-key",
-            "BACKUP_S3_SECRET": "your-s3-secret-key",
-            "TRAEFIK_DASHBOARD_USERS": "admin:$$apr1$$replace_me$$hash_goes_here",
-            "TZ": self.config.core.timezone
-        }
-        return env_vars
-    
-    def save_env_template(self, output_path: Path):
-        """Save environment template file"""
-        env_vars = self.generate_env_template()
         
         with open(output_path, 'w') as f:
             for key, value in env_vars.items():

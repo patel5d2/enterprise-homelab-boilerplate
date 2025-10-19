@@ -14,6 +14,7 @@ from rich.columns import Columns
 from ...core.config import Config
 from ...core.exceptions import HomeLabError
 import yaml
+from typing import Dict
 
 console = Console()
 
@@ -92,6 +93,9 @@ def _interactive_setup():
     
     selected_services = _interactive_service_selection()
     
+    # Collect custom environment variables for selected services
+    custom_env_vars = _collect_custom_environment_variables(selected_services)
+    
     # Build configuration dict
     config_data = {
         "core": {
@@ -164,6 +168,9 @@ def _interactive_setup():
             "traefik": True,  # Always enabled as default
             "nginx_proxy_manager": selected_services.get("nginx_proxy_manager", False),
             "caddy": selected_services.get("caddy", False)
+        },
+        "custom_env": {
+            "variables": custom_env_vars
         }
     }
     
@@ -252,6 +259,88 @@ def _interactive_service_selection() -> dict:
     console.print(f"\nTotal services selected: [bold]{len(enabled_services)}[/bold]")
     
     return selected
+
+
+def _collect_custom_environment_variables(selected_services: Dict[str, bool]) -> Dict[str, Dict[str, str]]:
+    """Collect custom environment variables for selected services"""
+    
+    custom_env_vars = {}
+    
+    # Get list of enabled services
+    enabled_services = [service for service, enabled in selected_services.items() if enabled]
+    
+    if not enabled_services:
+        return custom_env_vars
+    
+    console.print("\n[bold]⚙️ Custom Environment Variables[/bold]")
+    console.print("You can add custom environment variables for each service.")
+    console.print("Press [cyan]Enter[/cyan] to skip if you don't need custom variables for a service.")
+    
+    # Map of service IDs to user-friendly names
+    service_names = {
+        "postgresql": "PostgreSQL",
+        "redis": "Redis", 
+        "mongodb": "MongoDB",
+        "pihole": "Pi-hole",
+        "headscale": "Headscale",
+        "cloudflared": "Cloudflared",
+        "vaultwarden": "Vaultwarden",
+        "vault": "HashiCorp Vault",
+        "glance": "Glance Dashboard",
+        "uptime_kuma": "Uptime Kuma",
+        "gitlab": "GitLab CE",
+        "jenkins": "Jenkins",
+        "n8n": "n8n",
+        "fumadocs": "Fumadocs",
+        "nginx_proxy_manager": "Nginx Proxy Manager",
+        "caddy": "Caddy"
+    }
+    
+    for service in enabled_services:
+        service_display_name = service_names.get(service, service.title())
+        
+        console.print(f"\n[cyan]• {service_display_name}[/cyan]")
+        
+        if Confirm.ask(f"Add custom environment variables for {service_display_name}?", default=False):
+            service_env_vars = {}
+            
+            console.print(f"[dim]Enter environment variables for {service_display_name} (format: KEY=value)[/dim]")
+            console.print("[dim]Press Enter with empty input to finish adding variables[/dim]")
+            
+            while True:
+                env_input = Prompt.ask(
+                    "Environment variable (KEY=value)",
+                    default=""
+                )
+                
+                if not env_input.strip():
+                    break
+                    
+                # Parse KEY=value format
+                if "=" in env_input:
+                    key, value = env_input.split("=", 1)
+                    key = key.strip()
+                    value = value.strip()
+                    
+                    if key and value:
+                        service_env_vars[key] = value
+                        console.print(f"[green]Added: {key}={value}[/green]")
+                    else:
+                        console.print("[red]Invalid format. Use KEY=value[/red]")
+                else:
+                    console.print("[red]Invalid format. Use KEY=value (e.g., DEBUG=true)[/red]")
+            
+            if service_env_vars:
+                custom_env_vars[service] = service_env_vars
+                console.print(f"[green]✓ Added {len(service_env_vars)} custom variables for {service_display_name}[/green]")
+    
+    if custom_env_vars:
+        console.print(f"\n[bold green]Custom Environment Variables Summary:[/bold green]")
+        for service, vars_dict in custom_env_vars.items():
+            service_name = service_names.get(service, service.title())
+            console.print(f"  • {service_name}: {len(vars_dict)} variables")
+    
+    return custom_env_vars
 
 
 def _default_setup():

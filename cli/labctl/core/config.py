@@ -109,6 +109,26 @@ class ProxyConfig(BaseModel):
     caddy: bool = Field(default=False, description="Enable Caddy")
 
 
+class CustomEnvironmentConfig(BaseModel):
+    """Custom environment variables configuration for services"""
+    # Dictionary mapping service names to their custom environment variables
+    # Format: {"service_name": {"ENV_VAR_NAME": "value"}}
+    variables: Dict[str, Dict[str, str]] = Field(default_factory=dict, description="Custom environment variables per service")
+    
+    def get_service_vars(self, service_name: str) -> Dict[str, str]:
+        """Get custom environment variables for a specific service"""
+        return self.variables.get(service_name, {})
+    
+    def set_service_vars(self, service_name: str, env_vars: Dict[str, str]) -> None:
+        """Set custom environment variables for a specific service"""
+        if env_vars:  # Only set if there are actual variables
+            self.variables[service_name] = env_vars
+    
+    def has_custom_vars(self, service_name: str) -> bool:
+        """Check if a service has custom environment variables"""
+        return service_name in self.variables and bool(self.variables[service_name])
+
+
 class Config(BaseModel):
     """Main configuration class"""
     core: CoreConfig
@@ -128,6 +148,9 @@ class Config(BaseModel):
     automation: AutomationConfig = AutomationConfig()
     ci_cd: CIConfig = CIConfig()
     proxy: ProxyConfig = ProxyConfig()
+    
+    # Custom environment variables
+    custom_env: CustomEnvironmentConfig = CustomEnvironmentConfig()
 
     @classmethod
     def load_from_file(cls, config_path: Path) -> "Config":
