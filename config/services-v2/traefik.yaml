@@ -140,7 +140,7 @@ compose:
     - key: TRAEFIK_API_DASHBOARD
       from_field: enable_dashboard
     - key: TRAEFIK_CERTIFICATESRESOLVERS_LETSENCRYPT_ACME_DNSCHALLENGE
-      value: true
+      value: "true"
     - key: TRAEFIK_CERTIFICATESRESOLVERS_LETSENCRYPT_ACME_DNSCHALLENGE_PROVIDER
       value: cloudflare
     - key: TRAEFIK_CERTIFICATESRESOLVERS_LETSENCRYPT_ACME_EMAIL
@@ -148,10 +148,10 @@ compose:
     - key: TRAEFIK_CERTIFICATESRESOLVERS_LETSENCRYPT_ACME_STORAGE
       value: /acme/acme.json
     - key: TRAEFIK_CERTIFICATESRESOLVERS_LETSENCRYPT_ACME_CASERVER
-      value_if: 
-        condition: 'acme_environment == "staging"'
-        true: https://acme-staging-v02.api.letsencrypt.org/directory
-        false: https://acme-v02.api.letsencrypt.org/directory
+      value_map:
+        staging: "https://acme-staging-v02.api.letsencrypt.org/directory"
+        production: "https://acme-v02.api.letsencrypt.org/directory"
+      from_field: acme_environment
     - key: CF_API_EMAIL
       from_field: cloudflare_email
       condition: 'cloudflare_auth_method == "global_key"'
@@ -168,8 +168,7 @@ compose:
     - traefik.http.routers.traefik.tls.certresolver=letsencrypt
     - traefik.http.routers.traefik.service=api@internal
     - traefik.http.routers.traefik.middlewares=traefik-auth
-    - traefik.http.middlewares.traefik-auth.basicauth.users=${generate:htpasswd:dashboard_user:dashboard_password}
-    - condition: 'enable_dashboard == true'
+    - "traefik.http.middlewares.traefik-auth.basicauth.users=${generate:htpasswd:dashboard_user:dashboard_password}"
   
   command: |
     --api.dashboard=true

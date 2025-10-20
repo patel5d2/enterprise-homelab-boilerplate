@@ -119,7 +119,7 @@ fields:
     choices:
       - starttls
       - force_tls
-      - off
+      - "off"
 
   - key: smtp_username
     label: SMTP username
@@ -178,8 +178,7 @@ compose:
   
   ports:
     - "${http_port}:80"
-    - condition: 'enable_websocket == true'
-      value: "${websocket_port}:3012"
+    - "${websocket_port}:3012"
   
   volumes:
     - vaultwarden_data:/data
@@ -231,21 +230,18 @@ compose:
     - key: LOG_LEVEL
       from_field: log_level
     - key: EXTENDED_LOGGING
-      value: true
+      value: "true"
     - key: USE_SYSLOG
-      value: false
+      value: "false"
   
   labels:
     - "traefik.enable=true"
     - "traefik.http.routers.vaultwarden.rule=Host(`${subdomain}.${global:domain}`)"
     - "traefik.http.routers.vaultwarden.tls.certresolver=letsencrypt"
     - "traefik.http.services.vaultwarden.loadbalancer.server.port=80"
-    # WebSocket support
-    - condition: 'enable_websocket == true'
-      labels:
-        - "traefik.http.routers.vaultwarden-websocket.rule=Host(`${subdomain}.${global:domain}`) && Path(`/notifications/hub`)"
-        - "traefik.http.routers.vaultwarden-websocket.tls.certresolver=letsencrypt"
-        - "traefik.http.services.vaultwarden-websocket.loadbalancer.server.port=${websocket_port}"
+    - "traefik.http.routers.vaultwarden-websocket.rule=Host(`${subdomain}.${global:domain}`) && Path(`/notifications/hub`)"
+    - "traefik.http.routers.vaultwarden-websocket.tls.certresolver=letsencrypt"
+    - "traefik.http.services.vaultwarden-websocket.loadbalancer.server.port=${websocket_port}"
   
   depends_on:
     postgres:

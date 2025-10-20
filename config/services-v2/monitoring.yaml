@@ -157,176 +157,41 @@ fields:
       - nginx         # Nginx metrics
 
 compose:
-  # Prometheus
-  prometheus:
-    image: prom/prometheus:latest
-    container_name: prometheus
-    restart: unless-stopped
-    
-    ports:
-      - "${prometheus_port}:9090"
-    
-    volumes:
-      - prometheus_data:/prometheus
-      - prometheus_config:/etc/prometheus
-    
-    networks:
-      - traefik
-    
-    command:
-      - '--config.file=/etc/prometheus/prometheus.yml'
-      - '--storage.tsdb.path=/prometheus'
-      - '--web.console.libraries=/etc/prometheus/console_libraries'
-      - '--web.console.templates=/etc/prometheus/consoles'
-      - '--storage.tsdb.retention.time=${retention_days}d'
-      - '--web.enable-lifecycle'
-      - '--web.enable-admin-api'
-    
-    labels:
-      - "traefik.enable=true"
-      - "traefik.http.routers.prometheus.rule=Host(`${prometheus_subdomain}.${global:domain}`)"
-      - "traefik.http.routers.prometheus.tls.certresolver=letsencrypt"
-      - "traefik.http.services.prometheus.loadbalancer.server.port=9090"
-    
-    healthcheck:
-      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:9090/-/healthy"]
-      interval: 30s
-      timeout: 5s
-      retries: 3
-      start_period: 10s
+  image: prom/prometheus:latest
+  container_name: prometheus
+  restart: unless-stopped
 
-  # Grafana
-  grafana:
-    image: grafana/grafana:latest
-    container_name: grafana
-    restart: unless-stopped
-    
-    ports:
-      - "${grafana_port}:3000"
-    
-    volumes:
-      - grafana_data:/var/lib/grafana
-      - grafana_provisioning:/etc/grafana/provisioning
-    
-    networks:
-      - traefik
-    
-    environment:
-      - key: GF_SECURITY_ADMIN_USER
-        from_field: grafana_admin_user
-      - key: GF_SECURITY_ADMIN_PASSWORD
-        from_field: grafana_admin_password
-      - key: GF_SERVER_DOMAIN
-        template: "${grafana_subdomain}.${global:domain}"
-      - key: GF_SERVER_ROOT_URL
-        template: "https://${grafana_subdomain}.${global:domain}"
-      - key: GF_INSTALL_PLUGINS
-        value: "grafana-clock-panel,grafana-simple-json-datasource,grafana-worldmap-panel"
-      - key: GF_SMTP_ENABLED
-        template: "${if:smtp_smarthost}true${else}false${endif}"
-      - key: GF_SMTP_HOST
-        from_field: smtp_smarthost
-        condition: 'smtp_smarthost != ""'
-      - key: GF_SMTP_USER
-        from_field: smtp_auth_username
-        condition: 'smtp_smarthost != ""'
-      - key: GF_SMTP_PASSWORD
-        from_field: smtp_auth_password
-        condition: 'smtp_smarthost != ""'
-      - key: GF_SMTP_FROM_ADDRESS
-        from_field: smtp_from
-        condition: 'smtp_smarthost != ""'
-    
-    labels:
-      - "traefik.enable=true"
-      - "traefik.http.routers.grafana.rule=Host(`${grafana_subdomain}.${global:domain}`)"
-      - "traefik.http.routers.grafana.tls.certresolver=letsencrypt"
-      - "traefik.http.services.grafana.loadbalancer.server.port=3000"
-    
-    depends_on:
-      prometheus:
-        condition: service_healthy
-    
-    healthcheck:
-      test: ["CMD-SHELL", "curl -f http://localhost:3000/api/health || exit 1"]
-      interval: 30s
-      timeout: 5s
-      retries: 5
-      start_period: 30s
+  ports:
+    - "${prometheus_port}:9090"
 
-  # AlertManager (conditional)
-  additional_services:
-    alertmanager:
-      enabled_when: 'enable_alertmanager == true'
-      image: prom/alertmanager:latest
-      container_name: alertmanager
-      restart: unless-stopped
-      
-      ports:
-        - "${alertmanager_port}:9093"
-      
-      volumes:
-        - alertmanager_data:/alertmanager
-        - alertmanager_config:/etc/alertmanager
-      
-      networks:
-        - traefik
-      
-      command:
-        - '--config.file=/etc/alertmanager/alertmanager.yml'
-        - '--storage.path=/alertmanager'
-      
-      labels:
-        - "traefik.enable=true"
-        - "traefik.http.routers.alertmanager.rule=Host(`${alertmanager_subdomain}.${global:domain}`)"
-        - "traefik.http.routers.alertmanager.tls.certresolver=letsencrypt"
-        - "traefik.http.services.alertmanager.loadbalancer.server.port=9093"
+  volumes:
+    - prometheus_data:/prometheus
+    - prometheus_config:/etc/prometheus
 
-    node_exporter:
-      enabled_when: 'enable_node_exporter == true'
-      image: prom/node-exporter:latest
-      container_name: node-exporter
-      restart: unless-stopped
-      
-      ports:
-        - "9100:9100"
-      
-      volumes:
-        - /proc:/host/proc:ro
-        - /sys:/host/sys:ro
-        - /:/rootfs:ro
-      
-      networks:
-        - traefik
-      
-      command:
-        - '--path.procfs=/host/proc'
-        - '--path.rootfs=/rootfs'
-        - '--path.sysfs=/host/sys'
-        - '--collector.filesystem.mount-points-exclude=^/(sys|proc|dev|host|etc)($$|/)'
+  networks:
+    - traefik
 
-    cadvisor:
-      enabled_when: 'enable_cadvisor == true'
-      image: gcr.io/cadvisor/cadvisor:latest
-      container_name: cadvisor
-      restart: unless-stopped
-      
-      ports:
-        - "8080:8080"
-      
-      volumes:
-        - /:/rootfs:ro
-        - /var/run:/var/run:ro
-        - /sys:/sys:ro
-        - /var/lib/docker/:/var/lib/docker:ro
-        - /dev/disk/:/dev/disk:ro
-      
-      networks:
-        - traefik
-      
-      privileged: true
-      devices:
-        - /dev/kmsg
+  command:
+    - '--config.file=/etc/prometheus/prometheus.yml'
+    - '--storage.tsdb.path=/prometheus'
+    - '--web.console.libraries=/etc/prometheus/console_libraries'
+    - '--web.console.templates=/etc/prometheus/consoles'
+    - '--storage.tsdb.retention.time=${retention_days}d'
+    - '--web.enable-lifecycle'
+    - '--web.enable-admin-api'
+
+  labels:
+    - "traefik.enable=true"
+    - "traefik.http.routers.prometheus.rule=Host(`${prometheus_subdomain}.${global:domain}`)"
+    - "traefik.http.routers.prometheus.tls.certresolver=letsencrypt"
+    - "traefik.http.services.prometheus.loadbalancer.server.port=9090"
+
+  healthcheck:
+    test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:9090/-/healthy"]
+    interval: 30s
+    timeout: 5s
+    retries: 3
+    start_period: 10s
 
 defaults:
   dev:

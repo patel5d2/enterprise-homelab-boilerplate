@@ -275,11 +275,11 @@ compose:
       networks:
         - traefik
       environment:
-        - key: domain
+        - key: DOMAIN
           template: "${subdomain}.${global:domain}"
         - key: DONT_GEN_SSL_CERT
-          value: true
-        - key: extra_params
+          value: "true"
+        - key: EXTRA_PARAMS
           value: "--o:ssl.enable=false --o:ssl.termination=true"
       labels:
         - "traefik.enable=true"

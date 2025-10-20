@@ -163,9 +163,9 @@ compose:
     - key: FTLCONF_LOCAL_IPV4
       from_field: server_ip
     - key: DNSMASQ_LISTENING
-      value: all
+      value: "all"
     - key: WEB_PORT
-      value: 80
+      value: "80"
     - key: VIRTUAL_HOST
       template: "${subdomain}.${global:domain}"
     - key: PROXY_LOCATION
@@ -195,8 +195,13 @@ compose:
     - key: DHCP_ROUTER
       from_field: dhcp_router
       condition: 'enable_dhcp == true'
-    - key: PIHOLE_DNS_
-      template: "${dns1};${dns2}"
+    - key: PIHOLE_DNS_1
+      value_map:
+        cloudflare: "1.1.1.1"
+        google: "8.8.8.8"
+        quad9: "9.9.9.9"
+        opendns: "208.67.222.222"
+      from_field: primary_dns
   
   labels:
     - "traefik.enable=true"

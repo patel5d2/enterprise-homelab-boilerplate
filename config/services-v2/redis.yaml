@@ -67,7 +67,7 @@ fields:
       - none
       - rdb
       - aof
-      - both
+      - "both"
 
   - key: rdb_save_frequency
     label: RDB save frequency
@@ -89,7 +89,7 @@ fields:
     choices:
       - always
       - everysec
-      - no
+      - "no"
 
   - key: enable_clustering
     label: Enable clustering
