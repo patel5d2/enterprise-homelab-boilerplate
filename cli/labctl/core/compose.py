@@ -353,6 +353,31 @@ class ComposeGenerator:
                     # This is a named volume
                     self.volumes[volume_name] = None
     
+    def generate_compose(self) -> Dict[str, Any]:
+        """Generate complete docker-compose configuration"""
+        # Get enabled services
+        enabled_services = self._get_enabled_services()
+        
+        # Generate services using schemas or legacy fallback
+        for service_id, service_config in enabled_services.items():
+            if service_id in self.schemas:
+                # Use schema-based generation
+                schema = self.schemas[service_id]
+                compose_service = self._generate_service_from_schema(service_id, service_config, schema)
+            else:
+                # Use legacy generation
+                compose_service = self._generate_service_legacy(service_id, service_config)
+            
+            if compose_service:
+                self.services[service_id] = compose_service
+        
+        return {
+            "version": "3.8",
+            "services": self.services,
+            "networks": self.networks,
+            "volumes": self.volumes
+        }
+    
     def save_compose_file(self, file_path: Path) -> None:
         """Save Docker Compose configuration to file"""
         compose_config = self.generate_compose()

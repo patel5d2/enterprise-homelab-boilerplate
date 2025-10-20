@@ -2,6 +2,7 @@
 Build command - generates Docker Compose configurations
 """
 
+import time
 import yaml
 from pathlib import Path
 from typing import List, Optional
@@ -53,9 +54,11 @@ def run(
             compose_file = output_path / "docker-compose.yml"
             env_file = output_path / ".env.template"
             
-            # Check if files exist
+            # Check if files exist and handle gracefully
             if compose_file.exists() and not force:
-                raise HomeLabError(f"File exists: {compose_file}. Use --force to overwrite")
+                backup = compose_file.with_name(f"{compose_file.stem}.bak.{int(time.time())}{compose_file.suffix}")
+                compose_file.rename(backup)
+                console.print(f"[yellow]✓ Existing Compose file backed up to {backup.name}[/yellow]")
             
             # Generate and save compose file
             generator.save_compose_file(compose_file)
