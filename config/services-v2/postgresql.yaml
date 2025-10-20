@@ -1,0 +1,216 @@
+# PostgreSQL Database - Service Schema v2
+id: postgresql
+name: PostgreSQL
+category: Core Infrastructure
+description: Enterprise-grade relational database with high performance and reliability
+maturity: stable
+required_capabilities: []
+dependencies: []
+
+fields:
+  - key: enabled
+    label: Enable PostgreSQL
+    type: boolean
+    description: Enable PostgreSQL database server
+    default: true
+
+  - key: port
+    label: Database port
+    type: integer
+    description: Port for PostgreSQL connections
+    default: 5432
+    min: 1024
+    max: 65535
+
+  - key: database_name
+    label: Default database name
+    type: string
+    description: Name of the default database to create
+    default: homelab
+    required: true
+    validate_regex: '^[a-zA-Z][a-zA-Z0-9_]*$'
+
+  - key: superuser_name
+    label: Superuser username
+    type: string
+    description: PostgreSQL superuser username
+    default: postgres
+    required: true
+    validate_regex: '^[a-zA-Z][a-zA-Z0-9_]*$'
+
+  - key: superuser_password
+    label: Superuser password
+    type: password
+    description: PostgreSQL superuser password
+    required: true
+    generate: true
+    length: 32
+
+  - key: max_connections
+    label: Maximum connections
+    type: integer
+    description: Maximum number of concurrent database connections
+    default: 100
+    min: 10
+    max: 1000
+
+  - key: shared_buffers
+    label: Shared buffers
+    type: choice
+    description: Amount of memory for shared buffers
+    default: 256MB
+    choices:
+      - 128MB
+      - 256MB
+      - 512MB
+      - 1GB
+      - 2GB
+
+  - key: work_mem
+    label: Work memory
+    type: choice
+    description: Memory per query operation
+    default: 4MB
+    choices:
+      - 1MB
+      - 2MB
+      - 4MB
+      - 8MB
+      - 16MB
+
+  - key: enable_backups
+    label: Enable automated backups
+    type: boolean
+    description: Enable automated database backups with pg_dump
+    default: true
+
+  - key: backup_schedule
+    label: Backup schedule
+    type: choice
+    description: Cron schedule for automated backups
+    default: daily_2am
+    show_if: 'enable_backups == true'
+    choices:
+      - daily_2am
+      - daily_4am
+      - twice_daily
+      - weekly
+
+  - key: backup_retention_days
+    label: Backup retention (days)
+    type: integer
+    description: Number of days to keep backup files
+    default: 30
+    show_if: 'enable_backups == true'
+    min: 1
+    max: 365
+
+  - key: compress_backups
+    label: Compress backups
+    type: boolean
+    description: Compress backup files with gzip
+    default: true
+    show_if: 'enable_backups == true'
+
+  - key: create_additional_databases
+    label: Create additional databases
+    type: boolean
+    description: Create additional databases for services
+    default: true
+
+  - key: additional_databases
+    label: Additional database names
+    type: textarea
+    description: List of additional databases to create (one per line)
+    placeholder: "nextcloud\ngitlab\nn8n"
+    show_if: 'create_additional_databases == true'
+
+compose:
+  image: postgres:16
+  container_name: postgres
+  restart: unless-stopped
+  
+  ports:
+    - "${port}:5432"
+  
+  volumes:
+    - postgres_data:/var/lib/postgresql/data
+    - postgres_backups:/backups
+    - postgres_init:/docker-entrypoint-initdb.d
+  
+  networks:
+    - traefik
+  
+  environment:
+    - key: POSTGRES_DB
+      from_field: database_name
+    - key: POSTGRES_USER
+      from_field: superuser_name
+    - key: POSTGRES_PASSWORD
+      from_field: superuser_password
+    - key: POSTGRES_INITDB_ARGS
+      value: --encoding=UTF-8 --lc-collate=C --lc-ctype=C
+    - key: POSTGRES_MAX_CONNECTIONS
+      from_field: max_connections
+    - key: POSTGRES_SHARED_BUFFERS
+      from_field: shared_buffers
+    - key: POSTGRES_WORK_MEM
+      from_field: work_mem
+  
+  healthcheck:
+    test: ["CMD-SHELL", "pg_isready -U ${superuser_name} -d ${database_name}"]
+    interval: 30s
+    timeout: 5s
+    retries: 5
+    start_period: 10s
+
+  # Conditional backup service
+  additional_services:
+    postgres_backup:
+      enabled_when: 'enable_backups == true'
+      image: postgres:16
+      container_name: postgres-backup
+      restart: unless-stopped
+      volumes:
+        - postgres_backups:/backups
+      networks:
+        - traefik
+      environment:
+        - key: PGPASSWORD
+          from_field: superuser_password
+        - key: POSTGRES_HOST
+          value: postgres
+        - key: POSTGRES_USER
+          from_field: superuser_name
+        - key: POSTGRES_DB
+          from_field: database_name
+        - key: BACKUP_RETENTION_DAYS
+          from_field: backup_retention_days
+        - key: COMPRESS_BACKUPS
+          from_field: compress_backups
+        - key: BACKUP_SCHEDULE
+          value_map:
+            daily_2am: "0 2 * * *"
+            daily_4am: "0 4 * * *"
+            twice_daily: "0 2,14 * * *"
+            weekly: "0 2 * * 0"
+          from_field: backup_schedule
+      depends_on:
+        postgres:
+          condition: service_healthy
+      command: |
+        sh -c 'echo "$BACKUP_SCHEDULE /usr/local/bin/backup-postgres.sh" | crontab - && crond -f'
+
+defaults:
+  dev:
+    port: 5432
+    max_connections: 50
+    shared_buffers: 128MB
+    work_mem: 2MB
+    backup_retention_days: 7
+  prod:
+    port: 5432
+    max_connections: 200
+    shared_buffers: 512MB
+    work_mem: 8MB
+    backup_retention_days: 30

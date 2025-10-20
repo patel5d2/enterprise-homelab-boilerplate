@@ -1,0 +1,203 @@
+# Traefik Reverse Proxy - Service Schema v2
+id: traefik
+name: Traefik
+category: Core Infrastructure
+description: Modern reverse proxy with automatic SSL certificates and load balancing
+maturity: stable
+required_capabilities: []
+dependencies: []
+
+fields:
+  - key: enabled
+    label: Enable Traefik
+    type: boolean
+    description: Enable Traefik reverse proxy (required for other services)
+    default: true
+    required: true
+
+  - key: domain
+    label: Base domain
+    type: string
+    description: Base domain for all services (e.g. example.com)
+    required: true
+    placeholder: example.com
+    validate_regex: '^[a-zA-Z0-9][a-zA-Z0-9-]*[a-zA-Z0-9]*\.([a-zA-Z]{2,}\.?)+$'
+
+  - key: email
+    label: Admin email
+    type: string
+    description: Email address for Let's Encrypt certificates
+    required: true
+    placeholder: admin@example.com
+    validate_regex: '^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$'
+
+  - key: cloudflare_auth_method
+    label: Cloudflare authentication method
+    type: choice
+    description: Choose authentication method for DNS challenge
+    default: api_token
+    choices:
+      - api_token
+      - global_key
+
+  - key: cloudflare_api_token
+    label: Cloudflare API token
+    type: password
+    description: Cloudflare API token with Zone:Read, DNS:Edit permissions
+    required: true
+    show_if: 'cloudflare_auth_method == "api_token"'
+    mask: true
+
+  - key: cloudflare_global_key
+    label: Cloudflare Global API Key
+    type: password
+    description: Cloudflare Global API Key (less secure than token)
+    required: true
+    show_if: 'cloudflare_auth_method == "global_key"'
+    mask: true
+
+  - key: cloudflare_email
+    label: Cloudflare account email
+    type: string
+    description: Email associated with Cloudflare account
+    required: true
+    show_if: 'cloudflare_auth_method == "global_key"'
+    validate_regex: '^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$'
+
+  - key: acme_environment
+    label: ACME environment
+    type: choice
+    description: Let's Encrypt environment to use
+    default: production
+    choices:
+      - production
+      - staging
+
+  - key: enable_dashboard
+    label: Enable dashboard
+    type: boolean
+    description: Enable Traefik web dashboard
+    default: true
+
+  - key: dashboard_subdomain
+    label: Dashboard subdomain
+    type: string
+    description: Subdomain for Traefik dashboard
+    default: traefik
+    show_if: 'enable_dashboard == true'
+    validate_regex: '^[a-zA-Z0-9][a-zA-Z0-9-]*[a-zA-Z0-9]*$'
+
+  - key: dashboard_user
+    label: Dashboard username
+    type: string
+    description: Username for dashboard basic auth
+    default: admin
+    show_if: 'enable_dashboard == true'
+    validate_regex: '^[a-zA-Z0-9_]+$'
+
+  - key: dashboard_password
+    label: Dashboard password
+    type: password
+    description: Password for dashboard basic auth
+    required: true
+    show_if: 'enable_dashboard == true'
+    generate: true
+    length: 24
+
+  - key: enable_hsts
+    label: Enable HSTS
+    type: boolean
+    description: Enable HTTP Strict Transport Security headers
+    default: true
+
+  - key: enable_ipv6
+    label: Enable IPv6
+    type: boolean
+    description: Enable IPv6 support
+    default: false
+
+compose:
+  image: traefik:v3.1
+  container_name: traefik
+  restart: unless-stopped
+  
+  ports:
+    - "80:80"
+    - "443:443"
+    - "8080:8080"
+  
+  volumes:
+    - /var/run/docker.sock:/var/run/docker.sock:ro
+    - traefik_data:/data
+    - traefik_acme:/acme
+  
+  networks:
+    - traefik
+  
+  environment:
+    - key: TRAEFIK_LOG_LEVEL
+      value: INFO
+    - key: TRAEFIK_API_DASHBOARD
+      from_field: enable_dashboard
+    - key: TRAEFIK_CERTIFICATESRESOLVERS_LETSENCRYPT_ACME_DNSCHALLENGE
+      value: true
+    - key: TRAEFIK_CERTIFICATESRESOLVERS_LETSENCRYPT_ACME_DNSCHALLENGE_PROVIDER
+      value: cloudflare
+    - key: TRAEFIK_CERTIFICATESRESOLVERS_LETSENCRYPT_ACME_EMAIL
+      from_field: email
+    - key: TRAEFIK_CERTIFICATESRESOLVERS_LETSENCRYPT_ACME_STORAGE
+      value: /acme/acme.json
+    - key: TRAEFIK_CERTIFICATESRESOLVERS_LETSENCRYPT_ACME_CASERVER
+      value_if: 
+        condition: 'acme_environment == "staging"'
+        true: https://acme-staging-v02.api.letsencrypt.org/directory
+        false: https://acme-v02.api.letsencrypt.org/directory
+    - key: CF_API_EMAIL
+      from_field: cloudflare_email
+      condition: 'cloudflare_auth_method == "global_key"'
+    - key: CF_API_KEY
+      from_field: cloudflare_global_key
+      condition: 'cloudflare_auth_method == "global_key"'
+    - key: CF_DNS_API_TOKEN
+      from_field: cloudflare_api_token
+      condition: 'cloudflare_auth_method == "api_token"'
+  
+  labels:
+    - traefik.enable=true
+    - traefik.http.routers.traefik.rule=Host(`${dashboard_subdomain}.${domain}`)
+    - traefik.http.routers.traefik.tls.certresolver=letsencrypt
+    - traefik.http.routers.traefik.service=api@internal
+    - traefik.http.routers.traefik.middlewares=traefik-auth
+    - traefik.http.middlewares.traefik-auth.basicauth.users=${generate:htpasswd:dashboard_user:dashboard_password}
+    - condition: 'enable_dashboard == true'
+  
+  command: |
+    --api.dashboard=true
+    --api.insecure=false
+    --entrypoints.web.address=:80
+    --entrypoints.websecure.address=:443
+    --providers.docker=true
+    --providers.docker.exposedbydefault=false
+    --providers.docker.network=traefik
+    --certificatesresolvers.letsencrypt.acme.dnschallenge=true
+    --certificatesresolvers.letsencrypt.acme.dnschallenge.provider=cloudflare
+    --certificatesresolvers.letsencrypt.acme.email=${from_field:email}
+    --certificatesresolvers.letsencrypt.acme.storage=/acme/acme.json
+    --global.sendAnonymousUsage=false
+  
+  healthcheck:
+    test: ["CMD", "traefik", "healthcheck", "--ping"]
+    interval: 30s
+    timeout: 5s
+    retries: 3
+    start_period: 10s
+
+defaults:
+  dev:
+    acme_environment: staging
+    dashboard_subdomain: traefik-dev
+    enable_hsts: false
+  prod:
+    acme_environment: production
+    dashboard_subdomain: traefik
+    enable_hsts: true

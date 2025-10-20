@@ -11,6 +11,7 @@ from . import status_cmd
 from . import logs_cmd
 from . import stop_cmd
 from . import config_cmd
+from . import migrate_cmd
 
 __all__ = [
     "init_cmd",
@@ -21,4 +22,5 @@ __all__ = [
     "logs_cmd",
     "stop_cmd",
     "config_cmd",
+    "migrate_cmd",
 ]

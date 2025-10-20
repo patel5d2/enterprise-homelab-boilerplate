@@ -23,6 +23,7 @@ from .commands import (
     logs_cmd,
     stop_cmd,
     config_cmd,
+    migrate_cmd,
 )
 
 # Initialize Typer app
@@ -106,17 +107,30 @@ def init_command(
         "--force",
         help="Overwrite existing configuration",
     ),
+    profile: Optional[str] = typer.Option(
+        None,
+        "--profile",
+        help="Configuration profile (dev or prod)",
+    ),
+    non_interactive: bool = typer.Option(
+        False,
+        "--non-interactive",
+        help="Skip all prompts and use defaults",
+    ),
 ) -> None:
     """
     🚀 Initialize new home lab configuration
     
     Creates a new configuration file with guided setup wizard.
+    Uses the new service-specific configuration system with dependency management.
     """
     try:
         init_cmd.run(
             config_file=config_file,
             interactive=interactive,
             force=force,
+            profile=profile,
+            non_interactive=non_interactive,
         )
     except HomeLabError as e:
         console.print(f"[red]Error:[/red] {e.message}", err=True)
@@ -132,16 +146,22 @@ def validate_command(
     strict: bool = typer.Option(
         False,
         "--strict",
-        help="Enable strict validation",
+        help="Enable strict validation (warnings become errors)",
+    ),
+    preflight: bool = typer.Option(
+        False,
+        "--preflight",
+        help="Run preflight system checks (Docker, networking, etc.)",
     ),
 ) -> None:
     """
     ✅ Validate configuration and requirements
     
-    Checks configuration syntax, schema compliance, and system requirements.
+    Checks configuration syntax, schema compliance, service dependencies, and optionally
+    runs preflight system checks to ensure Docker and networking requirements are met.
     """
     try:
-        validate_cmd.run(config_file=config_file, strict=strict)
+        validate_cmd.run(config_file=config_file, strict=strict, preflight=preflight)
     except HomeLabError as e:
         console.print(f"[red]Validation failed:[/red] {e.message}", err=True)
         if hasattr(e, 'errors') and e.errors:
@@ -401,6 +421,50 @@ def config_command(
         )
     except HomeLabError as e:
         console.print(f"[red]Error:[/red] {e.message}", err=True)
+        raise typer.Exit(1)
+
+
+@app.command("migrate")
+def migrate_command(
+    input_file: str = typer.Argument(..., help="Input configuration file to migrate"),
+    output_file: Optional[str] = typer.Option(
+        None,
+        "--output",
+        "-o",
+        help="Output file for migrated configuration"
+    ),
+    backup: bool = typer.Option(
+        True,
+        "--backup/--no-backup",
+        help="Create backup of original file"
+    ),
+    preview: bool = typer.Option(
+        True,
+        "--preview/--no-preview",
+        help="Show migration preview before applying"
+    ),
+    force: bool = typer.Option(
+        False,
+        "--force",
+        help="Skip confirmation prompts"
+    ),
+) -> None:
+    """
+    📋 Migrate legacy configuration to v2 format
+    
+    Convert existing configuration files to the new v2 format with 
+    service-specific settings and enhanced structure.
+    """
+    try:
+        migrate_cmd.run(
+            input_file=input_file,
+            output_file=output_file,
+            backup=backup,
+            preview=preview,
+            force=force
+        )
+    except HomeLabError as e:
+        console.print(f"[red]Migration failed:[/red] {e.message}", err=True)
         raise typer.Exit(1)
 
 
