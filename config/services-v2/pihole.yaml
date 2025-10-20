@@ -1,0 +1,231 @@
+# Pi-hole DNS Blocking - Service Schema v2
+id: pihole
+name: Pi-hole
+category: Networking & DNS
+description: Network-wide ad blocking and local DNS server
+maturity: stable
+required_capabilities: []
+dependencies: []
+
+fields:
+  - key: enabled
+    label: Enable Pi-hole
+    type: boolean
+    description: Enable Pi-hole DNS server and ad blocking
+    default: false
+
+  - key: subdomain
+    label: Subdomain
+    type: string
+    description: Subdomain for Pi-hole web interface
+    default: pihole
+    required: true
+    validate_regex: '^[a-zA-Z0-9][a-zA-Z0-9-]*[a-zA-Z0-9]*$'
+
+  - key: web_password
+    label: Web interface password
+    type: password
+    description: Password for Pi-hole admin web interface
+    required: true
+    generate: true
+    length: 24
+
+  - key: server_ip
+    label: Server IP address
+    type: string
+    description: IP address of the server running Pi-hole
+    required: true
+    placeholder: 192.168.1.100
+    validate_regex: '^(\d{1,3}\.){3}\d{1,3}$'
+
+  - key: primary_dns
+    label: Primary upstream DNS
+    type: choice
+    description: Primary upstream DNS server
+    default: cloudflare
+    choices:
+      - cloudflare     # 1.1.1.1
+      - google         # 8.8.8.8
+      - quad9          # 9.9.9.9
+      - opendns        # 208.67.222.222
+
+  - key: secondary_dns
+    label: Secondary upstream DNS
+    type: choice
+    description: Secondary upstream DNS server
+    default: cloudflare_secondary
+    choices:
+      - cloudflare_secondary  # 1.0.0.1
+      - google_secondary      # 8.8.4.4
+      - quad9_secondary       # 149.112.112.112
+      - opendns_secondary     # 208.67.220.220
+
+  - key: enable_dhcp
+    label: Enable DHCP server
+    type: boolean
+    description: Enable built-in DHCP server (disable your router's DHCP first)
+    default: false
+
+  - key: dhcp_start
+    label: DHCP range start
+    type: string
+    description: Starting IP address for DHCP range
+    default: 192.168.1.100
+    show_if: 'enable_dhcp == true'
+    validate_regex: '^(\d{1,3}\.){3}\d{1,3}$'
+
+  - key: dhcp_end
+    label: DHCP range end
+    type: string
+    description: Ending IP address for DHCP range
+    default: 192.168.1.200
+    show_if: 'enable_dhcp == true'
+    validate_regex: '^(\d{1,3}\.){3}\d{1,3}$'
+
+  - key: dhcp_router
+    label: DHCP router/gateway
+    type: string
+    description: Router IP address for DHCP clients
+    default: 192.168.1.1
+    show_if: 'enable_dhcp == true'
+    validate_regex: '^(\d{1,3}\.){3}\d{1,3}$'
+
+  - key: default_blocklists
+    label: Default blocklists
+    type: multiselect
+    description: Select default blocklists to enable
+    default: [stevenblack, malware_domain_list]
+    choices:
+      - stevenblack           # StevenBlack's Unified hosts file
+      - malware_domain_list   # Malware Domain List
+      - disconnect            # Disconnect.me Tracking Protection
+      - easylist             # EasyList
+      - easyprivacy          # EasyPrivacy
+      - spam404              # Spam404
+
+  - key: custom_blocklists
+    label: Custom blocklist URLs
+    type: textarea
+    description: Additional blocklist URLs (one per line)
+    placeholder: "https://example.com/blocklist.txt\nhttps://another-list.com/ads.txt"
+
+  - key: whitelist_domains
+    label: Whitelisted domains
+    type: textarea
+    description: Always allowed domains (one per line)
+    placeholder: "example.com\nallowed-site.net"
+
+  - key: local_dns_records
+    label: Local DNS records
+    type: textarea
+    description: Local DNS entries in format 'IP domain' (one per line)
+    placeholder: "192.168.1.10 homeserver.local\n192.168.1.20 nas.local"
+
+  - key: log_queries
+    label: Log DNS queries
+    type: boolean
+    description: Enable logging of DNS queries (impacts performance)
+    default: true
+
+  - key: privacy_level
+    label: Privacy level
+    type: choice
+    description: Level of privacy for query logging
+    default: anonymous
+    show_if: 'log_queries == true'
+    choices:
+      - show_everything    # Show everything
+      - hide_domains      # Hide domains
+      - hide_domains_clients  # Hide domains and clients
+      - anonymous         # Anonymous mode
+
+compose:
+  image: pihole/pihole:latest
+  container_name: pihole
+  restart: unless-stopped
+  
+  ports:
+    - "53:53/tcp"
+    - "53:53/udp"
+    - "67:67/udp"  # DHCP (conditional)
+    - "8053:80/tcp"  # Web interface
+  
+  volumes:
+    - pihole_config:/etc/pihole
+    - pihole_dnsmasq:/etc/dnsmasq.d
+  
+  networks:
+    - traefik
+  
+  environment:
+    - key: WEBPASSWORD
+      from_field: web_password
+    - key: FTLCONF_LOCAL_IPV4
+      from_field: server_ip
+    - key: DNSMASQ_LISTENING
+      value: all
+    - key: WEB_PORT
+      value: 80
+    - key: VIRTUAL_HOST
+      template: "${subdomain}.${global:domain}"
+    - key: PROXY_LOCATION
+      from_field: subdomain
+    - key: DNS1
+      value_map:
+        cloudflare: "1.1.1.1"
+        google: "8.8.8.8"
+        quad9: "9.9.9.9"
+        opendns: "208.67.222.222"
+      from_field: primary_dns
+    - key: DNS2
+      value_map:
+        cloudflare_secondary: "1.0.0.1"
+        google_secondary: "8.8.4.4"
+        quad9_secondary: "149.112.112.112"
+        opendns_secondary: "208.67.220.220"
+      from_field: secondary_dns
+    - key: DHCP_ACTIVE
+      from_field: enable_dhcp
+    - key: DHCP_START
+      from_field: dhcp_start
+      condition: 'enable_dhcp == true'
+    - key: DHCP_END
+      from_field: dhcp_end
+      condition: 'enable_dhcp == true'
+    - key: DHCP_ROUTER
+      from_field: dhcp_router
+      condition: 'enable_dhcp == true'
+    - key: PIHOLE_DNS_
+      template: "${dns1};${dns2}"
+  
+  labels:
+    - "traefik.enable=true"
+    - "traefik.http.routers.pihole.rule=Host(`${subdomain}.${global:domain}`)"
+    - "traefik.http.routers.pihole.tls.certresolver=letsencrypt"
+    - "traefik.http.services.pihole.loadbalancer.server.port=80"
+  
+  cap_add:
+    - NET_ADMIN
+  
+  dns:
+    - 127.0.0.1
+    - 1.1.1.1
+  
+  healthcheck:
+    test: ["CMD", "dig", "@127.0.0.1", "google.com", "+short"]
+    interval: 30s
+    timeout: 5s
+    retries: 5
+    start_period: 30s
+
+defaults:
+  dev:
+    log_queries: false
+    privacy_level: anonymous
+    enable_dhcp: false
+    default_blocklists: [stevenblack]
+  prod:
+    log_queries: true
+    privacy_level: hide_domains
+    enable_dhcp: false
+    default_blocklists: [stevenblack, malware_domain_list, disconnect]

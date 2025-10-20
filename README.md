@@ -1,4 +1,4 @@
-# 🏠 Enterprise Home Lab Boilerplate
+# 🏠 Enterprise Home Lab CLI
 
 [![Python 3.11+](https://img.shields.io/badge/python-3.11+-blue.svg)](https://www.python.org/downloads/)
 [![Docker](https://img.shields.io/badge/docker-required-blue.svg)](https://docs.docker.com/get-docker/)
@@ -26,7 +26,7 @@ A comprehensive, enterprise-grade home lab infrastructure management system with
 - [⚙️ Advanced Configuration](#️-advanced-configuration)
 - [🤝 Contributing](#-contributing)
 
-## ✨ Features
+## 🚀 Quick Links
 
 ### Core Infrastructure Management
 - **🎯 Interactive Service Selection** - Choose exactly what you want with guided wizards
@@ -86,9 +86,21 @@ graph TB
     Core Services --> Cache
 ```
 
-## 📦 Available Services
+## ✨ What This Tool Does
 
-### Core Infrastructure
+The Home Lab CLI (`labctl`) simplifies deploying and managing self-hosted services by:
+
+- **Interactive Service Selection** - Choose exactly what you want to install
+- **Automatic Configuration** - Generates Docker Compose files and environment variables
+- **SSL Certificates** - Automatic HTTPS with Let's Encrypt via Traefik
+- **Monitoring Stack** - Built-in Prometheus, Grafana, and health checks
+- **Dependency Management** - Handles service dependencies automatically
+- **Enterprise Security** - Network isolation, secrets management, secure defaults
+
+**Architecture**: Python CLI → YAML config → Docker Compose + `.env` → Traefik reverse proxy with automatic SSL
+
+## 🎯 Available Services
+
 | Service | Description | Default Port | Web UI |
 |---------|-------------|--------------|--------|
 | **Traefik** | Reverse proxy with automatic SSL | 80, 443, 8080 | `traefik.yourdomain.com` |
@@ -155,7 +167,7 @@ graph TB
 | **Nginx Proxy Manager** | Web-based proxy management | 80, 443, 81 | `proxy.yourdomain.com` |
 | **Caddy** | Modern web server with auto-HTTPS | 80, 443, 2019 | `caddy.yourdomain.com` |
 
-## 🚀 Quick Start
+## 📋 Prerequisites
 
 ### 1. Prerequisites Check
 ```bash
@@ -183,6 +195,9 @@ chmod +x install.sh labctl
 
 ### 3. Interactive Setup
 ```bash
+
+python3 -m venv venv
+
 # Activate virtual environment
 source venv/bin/activate
 
@@ -195,8 +210,11 @@ pip install -e .
 # Build infrastructure
 ./labctl build
 
-# Deploy services
-./labctl deploy
+# 5. Deploy services (this takes a few minutes)
+./labctl deploy --build --wait
+
+# 6. Check status and get access URLs
+./labctl status
 ```
 
 ### 4. Access Your Services
@@ -214,7 +232,6 @@ After deployment (2-3 minutes), access services at:
 |-------------|---------|-------------|-------|
 | **CPU** | 2 cores | 4+ cores | Multi-core for container orchestration |
 | **RAM** | 4GB | 8GB+ | Memory per service varies (see service guide) |
-| **Storage** | 50GB | 100GB+ | For persistent data and images |
 | **OS** | macOS 10.15+, Linux, Windows 11 | Latest stable | Docker Desktop compatible |
 
 #### Required Software
@@ -572,7 +589,188 @@ For `.local` domains, add entries to your `/etc/hosts` file:
 127.0.0.1 pihole.homelab.local
 ```
 
-## 🚨 Troubleshooting
+# Build with custom output directory
+./labctl build --output ./my-compose-files
+
+# Stop and remove volumes (destructive!)
+./labctl stop --volumes --images
+
+# Show specific config values
+./labctl config --key core.domain
+
+# Migrate from old config format
+./labctl migrate old-config.yaml --output config.yaml
+```
+
+### Makefile Shortcuts
+
+```bash
+make help           # Show all available commands
+make quickstart     # Complete setup: install + init + build + deploy
+make install        # Install CLI dependencies only
+make validate       # Validate configuration  
+make build          # Generate Docker Compose files
+make deploy         # Deploy services (build + wait)
+make status         # Check service status
+make logs           # Show service logs (tail 50)
+make stop           # Stop all services
+make clean          # Stop and remove volumes/images
+make backup         # Run backup (if configured)
+make monitor        # Show monitoring dashboard URL
+```
+
+## 💼 Use Cases
+
+### 1. Home Network Setup (Pi-hole + Monitoring)
+
+**Goal**: Block ads network-wide and monitor your infrastructure.
+
+**Services**: Traefik, Pi-hole, Prometheus, Grafana, Uptime Kuma
+
+```bash
+./labctl init
+# During setup, select:
+# ✅ Traefik (required)
+# ✅ Pi-hole  
+# ✅ Prometheus
+# ✅ Grafana
+# ✅ Uptime Kuma
+
+./labctl deploy --build --wait
+
+# Access your services:
+# Pi-hole: https://pihole.homelab.example.com
+# Grafana: https://grafana.homelab.example.com  
+# Uptime: https://uptime.homelab.example.com
+```
+
+### 2. Personal Cloud Storage (Nextcloud)
+
+**Goal**: Self-hosted alternative to Google Drive/Dropbox.
+
+**Services**: Traefik, Nextcloud, PostgreSQL, Redis
+
+```bash
+./labctl init
+# Select: Traefik, Nextcloud, PostgreSQL, Redis
+
+./labctl deploy --build --wait
+
+# Access: https://nextcloud.homelab.example.com
+# Initial admin setup required on first visit
+```
+
+### 3. Development Platform (GitLab)
+
+**Goal**: Complete DevOps platform with Git, CI/CD, and container registry.
+
+**Services**: Traefik, GitLab, PostgreSQL, Redis  
+
+```bash
+./labctl init
+# Select: Traefik, GitLab, PostgreSQL, Redis
+
+./labctl deploy --build --wait
+
+# Access: https://gitlab.homelab.example.com
+# First login: root / check generated password in logs
+./labctl logs --services gitlab --tail 50 | grep password
+```
+
+### 4. Password Management (Vaultwarden)
+
+**Goal**: Self-hosted Bitwarden server for password management.
+
+**Services**: Traefik, Vaultwarden, PostgreSQL
+
+```bash
+./labctl init
+# Select: Traefik, Vaultwarden, PostgreSQL
+
+./labctl deploy --build --wait
+
+# Access: https://vaultwarden.homelab.example.com
+# Create admin account on first visit
+```
+
+### 5. Monitoring-Only Stack
+
+**Goal**: Comprehensive monitoring without other services.
+
+**Services**: Traefik, Prometheus, Grafana, Uptime Kuma
+
+```bash
+./labctl init
+# Select monitoring services only
+
+./labctl deploy --build --wait
+
+# Access:
+# Grafana: https://grafana.homelab.example.com
+# Uptime Kuma: https://uptime.homelab.example.com
+```
+
+## ⚙️ Configuration
+
+### Configuration Files
+
+| File | Purpose |
+|------|----------|
+| `config/config.yaml` | Main configuration (generated by `init`) |
+| `config/config.example.yaml` | Configuration template |
+| `.env` | Generated secrets and environment variables |
+| `docker-compose.yml` | Generated Docker Compose file |
+
+### Basic Configuration Example
+
+```yaml
+# Minimal config.yaml example
+core:
+  domain: homelab.example.com
+  email: admin@homelab.example.com
+  timezone: America/New_York
+
+reverse_proxy:
+  provider: traefik
+  ssl_provider: letsencrypt
+  staging: false  # Set to true for testing
+
+services:
+  traefik:
+    enabled: true
+  prometheus: 
+    enabled: true
+  grafana:
+    enabled: true
+  pihole:
+    enabled: false
+
+# Custom environment variables for services
+custom_env:
+  variables:
+    grafana:
+      - GF_SECURITY_ADMIN_USER=admin
+      - GF_SECURITY_ADMIN_PASSWORD=your_secure_password
+```
+
+### Service URLs
+
+Services are automatically available at `https://{service}.{domain}`:
+
+- Traefik Dashboard: `https://traefik.homelab.example.com`
+- Grafana: `https://grafana.homelab.example.com`  
+- Pi-hole: `https://pihole.homelab.example.com`
+- Nextcloud: `https://nextcloud.homelab.example.com`
+- GitLab: `https://gitlab.homelab.example.com`
+
+### Security Notes
+
+- Generated passwords are stored in `.env` - keep this file secure
+- Never commit `.env` to version control
+- Use `staging: true` for testing to avoid Let's Encrypt rate limits
+- Generated certificates are stored in `ssl/` directory
+
+## 🔧 Troubleshooting
 
 ### Common Issues and Solutions
 
@@ -876,7 +1074,11 @@ jobs:
           ./labctl deploy
 ```
 
-## 🤝 Contributing
+#### Permission Errors on Volumes
+```bash
+# Fix data directory permissions
+sudo chown -R $USER:$USER data/
+sudo chmod -R 755 data/
 
 We welcome contributions from the community! Here's how you can help:
 
@@ -956,7 +1158,11 @@ When reporting issues, please include:
 
 ---
 
-## 📄 License
+#### Docker/Compose Issues  
+```bash
+# Update Docker and Compose
+# macOS: Update Docker Desktop
+# Linux: Update docker-ce and docker-compose-plugin
 
 This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
 

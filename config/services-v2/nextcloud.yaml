@@ -1,0 +1,304 @@
+# Nextcloud - Service Schema v2
+id: nextcloud
+name: Nextcloud
+category: Storage & Collaboration
+description: Self-hosted cloud storage and collaboration platform
+maturity: stable
+required_capabilities: []
+dependencies: 
+  - postgresql
+  - redis
+
+fields:
+  - key: enabled
+    label: Enable Nextcloud
+    type: boolean
+    description: Enable Nextcloud cloud storage platform
+    default: false
+
+  - key: subdomain
+    label: Subdomain
+    type: string
+    description: Subdomain for Nextcloud (e.g. 'cloud' for cloud.example.com)
+    default: cloud
+    required: true
+    validate_regex: '^[a-zA-Z0-9][a-zA-Z0-9-]*[a-zA-Z0-9]*$'
+
+  - key: http_port
+    label: HTTP port (internal)
+    type: integer
+    description: Internal container port for HTTP traffic
+    default: 8081
+    min: 1024
+    max: 65535
+
+  - key: admin_user
+    label: Admin username
+    type: string
+    description: Nextcloud administrator username
+    default: admin
+    required: true
+    validate_regex: '^[a-zA-Z0-9_]+$'
+
+  - key: admin_password
+    label: Admin password
+    type: password
+    description: Nextcloud administrator password
+    required: true
+    generate: true
+    length: 32
+
+  - key: database_name
+    label: Database name
+    type: string
+    description: PostgreSQL database name for Nextcloud
+    default: nextcloud
+    required: true
+    validate_regex: '^[a-zA-Z][a-zA-Z0-9_]*$'
+
+  - key: database_user
+    label: Database username
+    type: string
+    description: PostgreSQL user for Nextcloud database
+    default: nextcloud
+    required: true
+    validate_regex: '^[a-zA-Z][a-zA-Z0-9_]*$'
+
+  - key: database_password
+    label: Database password
+    type: password
+    description: PostgreSQL password for Nextcloud user
+    required: true
+    generate: true
+    length: 32
+
+  - key: max_upload_size
+    label: Maximum upload size
+    type: choice
+    description: Maximum file upload size
+    default: 512M
+    choices:
+      - 128M
+      - 256M
+      - 512M
+      - 1G
+      - 2G
+      - 4G
+
+  - key: memory_limit
+    label: PHP memory limit
+    type: choice
+    description: PHP memory limit for Nextcloud
+    default: 512M
+    choices:
+      - 256M
+      - 512M
+      - 1G
+      - 2G
+
+  - key: enable_preview_generator
+    label: Enable preview generator
+    type: boolean
+    description: Enable preview generation for files (requires more resources)
+    default: true
+
+  - key: enable_office_integration
+    label: Enable office integration
+    type: boolean
+    description: Enable Collabora Online for document editing
+    default: false
+
+  - key: enable_talk
+    label: Enable Talk (Video Chat)
+    type: boolean
+    description: Enable Nextcloud Talk for video/audio calls
+    default: false
+
+  - key: turn_server
+    label: TURN server
+    type: string
+    description: TURN server for Talk (required for NAT traversal)
+    placeholder: turn:turn.example.com:3478
+    show_if: 'enable_talk == true'
+
+  - key: turn_secret
+    label: TURN server secret
+    type: password
+    description: Shared secret for TURN server authentication
+    show_if: 'enable_talk == true'
+    generate: true
+    length: 64
+
+  - key: trusted_proxies
+    label: Trusted proxies
+    type: textarea
+    description: List of trusted proxy IP addresses (one per line)
+    placeholder: "10.0.0.0/8\n172.16.0.0/12\n192.168.0.0/16"
+
+  - key: mail_server
+    label: Mail server
+    type: string
+    description: SMTP server for sending emails (optional)
+    placeholder: smtp.example.com
+
+  - key: mail_port
+    label: Mail port
+    type: integer
+    description: SMTP server port
+    default: 587
+    min: 1
+    max: 65535
+    show_if: 'mail_server != ""'
+
+  - key: mail_username
+    label: Mail username
+    type: string
+    description: SMTP username for authentication
+    show_if: 'mail_server != ""'
+
+  - key: mail_password
+    label: Mail password
+    type: password
+    description: SMTP password for authentication
+    show_if: 'mail_server != ""'
+    mask: true
+
+compose:
+  image: nextcloud:28
+  container_name: nextcloud
+  restart: unless-stopped
+  
+  ports:
+    - "${http_port}:80"
+  
+  volumes:
+    - nextcloud_data:/var/www/html
+    - nextcloud_config:/var/www/html/config
+    - nextcloud_custom_apps:/var/www/html/custom_apps
+    - nextcloud_files:/var/www/html/data
+  
+  networks:
+    - traefik
+  
+  environment:
+    - key: NEXTCLOUD_ADMIN_USER
+      from_field: admin_user
+    - key: NEXTCLOUD_ADMIN_PASSWORD
+      from_field: admin_password
+    - key: NEXTCLOUD_TRUSTED_DOMAINS
+      template: "${subdomain}.${global:domain}"
+    - key: OVERWRITEPROTOCOL
+      value: https
+    - key: OVERWRITECLIURL
+      template: "https://${subdomain}.${global:domain}"
+    - key: OVERWRITEHOST
+      template: "${subdomain}.${global:domain}"
+    - key: POSTGRES_HOST
+      from_service: postgresql.container_name
+    - key: POSTGRES_DB
+      from_field: database_name
+    - key: POSTGRES_USER
+      from_field: database_user
+    - key: POSTGRES_PASSWORD
+      from_field: database_password
+    - key: REDIS_HOST
+      from_service: redis.container_name
+    - key: REDIS_HOST_PASSWORD
+      from_service: redis.password
+    - key: PHP_MEMORY_LIMIT
+      from_field: memory_limit
+    - key: PHP_UPLOAD_LIMIT
+      from_field: max_upload_size
+  
+  labels:
+    - "traefik.enable=true"
+    - "traefik.http.routers.nextcloud.rule=Host(`${subdomain}.${global:domain}`)"
+    - "traefik.http.routers.nextcloud.tls.certresolver=letsencrypt"
+    - "traefik.http.services.nextcloud.loadbalancer.server.port=80"
+    - "traefik.http.middlewares.nextcloud-caldav.redirectregex.permanent=true"
+    - "traefik.http.middlewares.nextcloud-caldav.redirectregex.regex=^https://(.*)/.well-known/(card|cal)dav"
+    - "traefik.http.middlewares.nextcloud-caldav.redirectregex.replacement=https://$$1/remote.php/dav/"
+    - "traefik.http.routers.nextcloud.middlewares=nextcloud-caldav"
+  
+  depends_on:
+    postgres:
+      condition: service_healthy
+    redis:
+      condition: service_healthy
+  
+  healthcheck:
+    test: ["CMD", "curl", "-f", "http://localhost/status.php"]
+    interval: 30s
+    timeout: 10s
+    retries: 5
+    start_period: 60s
+
+  # Conditional services
+  additional_services:
+    nextcloud_cron:
+      enabled_when: 'enabled == true'
+      image: nextcloud:28
+      container_name: nextcloud-cron
+      restart: unless-stopped
+      volumes:
+        - nextcloud_data:/var/www/html
+        - nextcloud_config:/var/www/html/config
+        - nextcloud_custom_apps:/var/www/html/custom_apps
+        - nextcloud_files:/var/www/html/data
+      networks:
+        - traefik
+      environment:
+        - key: POSTGRES_HOST
+          from_service: postgresql.container_name
+        - key: POSTGRES_DB
+          from_field: database_name
+        - key: POSTGRES_USER
+          from_field: database_user
+        - key: POSTGRES_PASSWORD
+          from_field: database_password
+        - key: REDIS_HOST
+          from_service: redis.container_name
+        - key: REDIS_HOST_PASSWORD
+          from_service: redis.password
+      depends_on:
+        nextcloud:
+          condition: service_healthy
+      entrypoint: /cron.sh
+
+    collabora:
+      enabled_when: 'enable_office_integration == true'
+      image: collabora/code:latest
+      container_name: nextcloud-collabora
+      restart: unless-stopped
+      ports:
+        - "9980:9980"
+      networks:
+        - traefik
+      environment:
+        - key: domain
+          template: "${subdomain}.${global:domain}"
+        - key: DONT_GEN_SSL_CERT
+          value: true
+        - key: extra_params
+          value: "--o:ssl.enable=false --o:ssl.termination=true"
+      labels:
+        - "traefik.enable=true"
+        - "traefik.http.routers.collabora.rule=Host(`office.${global:domain}`)"
+        - "traefik.http.routers.collabora.tls.certresolver=letsencrypt"
+        - "traefik.http.services.collabora.loadbalancer.server.port=9980"
+
+defaults:
+  dev:
+    http_port: 8081
+    max_upload_size: 256M
+    memory_limit: 256M
+    enable_preview_generator: false
+    enable_office_integration: false
+    enable_talk: false
+  prod:
+    http_port: 8081
+    max_upload_size: 2G
+    memory_limit: 1G
+    enable_preview_generator: true
+    enable_office_integration: true
+    enable_talk: false

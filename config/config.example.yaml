@@ -1,6 +1,9 @@
 # Enterprise Home Lab Configuration Example
 # Copy this file to config.yaml and customize for your environment
 
+# Configuration version - DO NOT CHANGE
+version: 1
+
 core:
   # Your primary domain - all services will use subdomains of this
   domain: "homelab.example.com"

@@ -1,0 +1,183 @@
+# Redis Cache & Message Broker - Service Schema v2
+id: redis
+name: Redis
+category: Core Infrastructure
+description: In-memory data structure store used as database, cache, and message broker
+maturity: stable
+required_capabilities: []
+dependencies: []
+
+fields:
+  - key: enabled
+    label: Enable Redis
+    type: boolean
+    description: Enable Redis server
+    default: true
+
+  - key: port
+    label: Redis port
+    type: integer
+    description: Port for Redis connections
+    default: 6379
+    min: 1024
+    max: 65535
+
+  - key: password
+    label: Redis password
+    type: password
+    description: Authentication password for Redis (leave empty for no auth)
+    generate: true
+    length: 32
+    required: false
+
+  - key: max_memory
+    label: Maximum memory
+    type: choice
+    description: Maximum memory Redis can use
+    default: 512mb
+    choices:
+      - 128mb
+      - 256mb
+      - 512mb
+      - 1gb
+      - 2gb
+      - 4gb
+
+  - key: eviction_policy
+    label: Eviction policy
+    type: choice
+    description: Policy for evicting keys when memory limit is reached
+    default: allkeys-lru
+    choices:
+      - noeviction
+      - allkeys-lru
+      - volatile-lru
+      - allkeys-random
+      - volatile-random
+      - volatile-ttl
+      - volatile-lfu
+      - allkeys-lfu
+
+  - key: persistence_mode
+    label: Persistence mode
+    type: choice
+    description: Data persistence strategy
+    default: rdb
+    choices:
+      - none
+      - rdb
+      - aof
+      - both
+
+  - key: rdb_save_frequency
+    label: RDB save frequency
+    type: choice
+    description: How often to save RDB snapshots
+    default: standard
+    show_if: 'persistence_mode == "rdb" || persistence_mode == "both"'
+    choices:
+      - conservative
+      - standard
+      - aggressive
+
+  - key: aof_fsync
+    label: AOF fsync policy
+    type: choice
+    description: How often to sync AOF file to disk
+    default: everysec
+    show_if: 'persistence_mode == "aof" || persistence_mode == "both"'
+    choices:
+      - always
+      - everysec
+      - no
+
+  - key: enable_clustering
+    label: Enable clustering
+    type: boolean
+    description: Enable Redis cluster mode (requires multiple nodes)
+    default: false
+
+  - key: cluster_nodes
+    label: Cluster nodes
+    type: integer
+    description: Number of cluster nodes to deploy
+    default: 3
+    show_if: 'enable_clustering == true'
+    min: 3
+    max: 9
+
+  - key: log_level
+    label: Log level
+    type: choice
+    description: Redis server log level
+    default: notice
+    choices:
+      - debug
+      - verbose
+      - notice
+      - warning
+
+compose:
+  image: redis:7-alpine
+  container_name: redis
+  restart: unless-stopped
+  
+  ports:
+    - "${port}:6379"
+  
+  volumes:
+    - redis_data:/data
+    - redis_config:/usr/local/etc/redis
+  
+  networks:
+    - traefik
+  
+  environment:
+    - key: REDIS_PASSWORD
+      from_field: password
+      condition: 'password != ""'
+  
+  command: |
+    sh -c 'redis-server
+    --port 6379
+    --maxmemory ${from_field:max_memory}
+    --maxmemory-policy ${from_field:eviction_policy}
+    --loglevel ${from_field:log_level}
+    ${if:password}--requirepass ${from_field:password}${endif}
+    ${if:persistence_mode:rdb|both}--save ${rdb_config}${endif}
+    ${if:persistence_mode:aof|both}--appendonly yes --appendfsync ${from_field:aof_fsync}${endif}
+    ${if:persistence_mode:none}--save ""${endif}'
+  
+  healthcheck:
+    test: 
+      - CMD
+      - redis-cli
+      - ${if:password}--auth${endif}
+      - ${if:password}${from_field:password}${endif}
+      - ping
+    interval: 30s
+    timeout: 5s
+    retries: 5
+    start_period: 10s
+
+  # Template variables for command generation
+  template_vars:
+    rdb_config:
+      conservative: "3600 1 300 100 60 10000"
+      standard: "900 1 300 10 60 10000"
+      aggressive: "300 10 60 100"
+
+defaults:
+  dev:
+    port: 6379
+    max_memory: 256mb
+    persistence_mode: rdb
+    rdb_save_frequency: standard
+    log_level: debug
+  prod:
+    port: 6379
+    max_memory: 1gb
+    persistence_mode: both
+    rdb_save_frequency: conservative
+    aof_fsync: everysec
+    log_level: notice

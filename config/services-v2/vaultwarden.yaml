@@ -1,0 +1,275 @@
+# Vaultwarden Password Manager - Service Schema v2
+id: vaultwarden
+name: Vaultwarden
+category: Security & Secrets
+description: Self-hosted Bitwarden-compatible password manager
+maturity: stable
+required_capabilities: []
+dependencies: [postgresql]
+
+fields:
+  - key: enabled
+    label: Enable Vaultwarden
+    type: boolean
+    description: Enable Vaultwarden password manager
+    default: false
+
+  - key: subdomain
+    label: Subdomain
+    type: string
+    description: Subdomain for Vaultwarden web vault
+    default: vault
+    required: true
+    validate_regex: '^[a-zA-Z0-9][a-zA-Z0-9-]*[a-zA-Z0-9]*$'
+
+  - key: http_port
+    label: HTTP port (internal)
+    type: integer
+    description: Internal container port for HTTP traffic
+    default: 8080
+    min: 1024
+    max: 65535
+
+  - key: database_name
+    label: Database name
+    type: string
+    description: PostgreSQL database name for Vaultwarden
+    default: vaultwarden
+    required: true
+    validate_regex: '^[a-zA-Z][a-zA-Z0-9_]*$'
+
+  - key: database_user
+    label: Database username
+    type: string
+    description: PostgreSQL user for Vaultwarden database
+    default: vaultwarden
+    required: true
+    validate_regex: '^[a-zA-Z][a-zA-Z0-9_]*$'
+
+  - key: database_password
+    label: Database password
+    type: password
+    description: PostgreSQL password for Vaultwarden user
+    required: true
+    generate: true
+    length: 32
+
+  - key: admin_token
+    label: Admin token
+    type: password
+    description: Token for accessing admin panel (leave empty to disable admin panel)
+    generate: true
+    length: 64
+    required: false
+
+  - key: signups_allowed
+    label: Allow new signups
+    type: boolean
+    description: Allow users to register new accounts
+    default: true
+
+  - key: invitations_allowed
+    label: Allow invitations
+    type: boolean
+    description: Allow users to invite others (requires signups disabled)
+    default: true
+
+  - key: show_password_hint
+    label: Show password hints
+    type: boolean
+    description: Allow users to see password hints on login page
+    default: false
+
+  - key: enable_websocket
+    label: Enable WebSocket notifications
+    type: boolean
+    description: Enable real-time sync notifications
+    default: true
+
+  - key: websocket_port
+    label: WebSocket port
+    type: integer
+    description: Port for WebSocket notifications
+    default: 3012
+    show_if: 'enable_websocket == true'
+    min: 1024
+    max: 65535
+
+  - key: smtp_host
+    label: SMTP server
+    type: string
+    description: SMTP server for email notifications (optional)
+    placeholder: smtp.gmail.com
+
+  - key: smtp_port
+    label: SMTP port
+    type: integer
+    description: SMTP server port
+    default: 587
+    min: 1
+    max: 65535
+    show_if: 'smtp_host != ""'
+
+  - key: smtp_ssl
+    label: SMTP SSL/TLS
+    type: choice
+    description: SMTP encryption method
+    default: starttls
+    show_if: 'smtp_host != ""'
+    choices:
+      - starttls
+      - force_tls
+      - off
+
+  - key: smtp_username
+    label: SMTP username
+    type: string
+    description: SMTP username for authentication
+    show_if: 'smtp_host != ""'
+
+  - key: smtp_password
+    label: SMTP password
+    type: password
+    description: SMTP password for authentication
+    show_if: 'smtp_host != ""'
+    mask: true
+
+  - key: smtp_from
+    label: From email address
+    type: string
+    description: Email address for outgoing emails
+    placeholder: vaultwarden@example.com
+    show_if: 'smtp_host != ""'
+    validate_regex: '^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$'
+
+  - key: enable_2fa
+    label: Enable 2FA
+    type: boolean
+    description: Enable two-factor authentication support
+    default: true
+
+  - key: icon_service
+    label: Icon service
+    type: choice
+    description: Service to use for website icons
+    default: internal
+    choices:
+      - internal
+      - bitwarden
+      - duckduckgo
+      - google
+
+  - key: log_level
+    label: Log level
+    type: choice
+    description: Application log level
+    default: info
+    choices:
+      - trace
+      - debug
+      - info
+      - warn
+      - error
+
+compose:
+  image: vaultwarden/server:latest
+  container_name: vaultwarden
+  restart: unless-stopped
+  
+  ports:
+    - "${http_port}:80"
+    - condition: 'enable_websocket == true'
+      value: "${websocket_port}:3012"
+  
+  volumes:
+    - vaultwarden_data:/data
+  
+  networks:
+    - traefik
+  
+  environment:
+    - key: DOMAIN
+      template: "https://${subdomain}.${global:domain}"
+    - key: DATABASE_URL
+      template: "postgresql://${database_user}:${database_password}@postgres/${database_name}"
+    - key: ADMIN_TOKEN
+      from_field: admin_token
+      condition: 'admin_token != ""'
+    - key: SIGNUPS_ALLOWED
+      from_field: signups_allowed
+    - key: INVITATIONS_ALLOWED
+      from_field: invitations_allowed
+    - key: SHOW_PASSWORD_HINT
+      from_field: show_password_hint
+    - key: WEBSOCKET_ENABLED
+      from_field: enable_websocket
+    - key: WEBSOCKET_PORT
+      from_field: websocket_port
+      condition: 'enable_websocket == true'
+    - key: SMTP_HOST
+      from_field: smtp_host
+      condition: 'smtp_host != ""'
+    - key: SMTP_PORT
+      from_field: smtp_port
+      condition: 'smtp_host != ""'
+    - key: SMTP_SECURITY
+      from_field: smtp_ssl
+      condition: 'smtp_host != ""'
+    - key: SMTP_USERNAME
+      from_field: smtp_username
+      condition: 'smtp_host != ""'
+    - key: SMTP_PASSWORD
+      from_field: smtp_password
+      condition: 'smtp_host != ""'
+    - key: SMTP_FROM
+      from_field: smtp_from
+      condition: 'smtp_host != ""'
+    - key: DISABLE_2FA
+      template: "${if:enable_2fa}false${else}true${endif}"
+    - key: ICON_SERVICE
+      from_field: icon_service
+    - key: LOG_LEVEL
+      from_field: log_level
+    - key: EXTENDED_LOGGING
+      value: true
+    - key: USE_SYSLOG
+      value: false
+  
+  labels:
+    - "traefik.enable=true"
+    - "traefik.http.routers.vaultwarden.rule=Host(`${subdomain}.${global:domain}`)"
+    - "traefik.http.routers.vaultwarden.tls.certresolver=letsencrypt"
+    - "traefik.http.services.vaultwarden.loadbalancer.server.port=80"
+    # WebSocket support
+    - condition: 'enable_websocket == true'
+      labels:
+        - "traefik.http.routers.vaultwarden-websocket.rule=Host(`${subdomain}.${global:domain}`) && Path(`/notifications/hub`)"
+        - "traefik.http.routers.vaultwarden-websocket.tls.certresolver=letsencrypt"
+        - "traefik.http.services.vaultwarden-websocket.loadbalancer.server.port=${websocket_port}"
+  
+  depends_on:
+    postgres:
+      condition: service_healthy
+  
+  healthcheck:
+    test: ["CMD", "curl", "-f", "http://localhost/alive"]
+    interval: 30s
+    timeout: 5s
+    retries: 5
+    start_period: 30s
+
+defaults:
+  dev:
+    http_port: 8080
+    signups_allowed: true
+    invitations_allowed: true
+    show_password_hint: true
+    enable_websocket: false
+    log_level: debug
+  prod:
+    http_port: 8080
+    signups_allowed: false
+    invitations_allowed: true
+    show_password_hint: false
+    enable_websocket: true
+    log_level: info
