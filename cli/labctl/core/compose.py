@@ -119,6 +119,18 @@ class ComposeGenerator:
             console.print(f"[yellow]Warning: No compose configuration in schema for {service_id}[/yellow]")
             return None
         
+        try:
+            return self._build_service_from_schema(service_id, service_config, schema)
+        except Exception as e:
+            console.print(f"[red]Error generating service {service_id}: {e}[/red]")
+            console.print(f"[yellow]Falling back to legacy generation for {service_id}[/yellow]")
+            return self._generate_service_legacy(service_id, service_config)
+    
+    def _build_service_from_schema(self, service_id: str, service_config: Any, schema: ServiceSchema) -> Dict[str, Any]:
+        """Build service configuration from schema (with error handling)"""
+        if not schema.compose.image:
+            raise ValueError(f"Service {service_id} schema missing required 'image' field")
+        
         compose_service = {
             "image": schema.compose.image,
             "container_name": service_id,
@@ -126,52 +138,73 @@ class ComposeGenerator:
             "networks": ["traefik"]
         }
         
-        # Add environment variables
-        if schema.compose.environment:
-            environment = self._build_environment_from_schema(service_id, service_config, schema)
-            if environment:
-                compose_service["environment"] = environment
+        try:
+            # Add environment variables
+            if schema.compose.environment:
+                environment = self._build_environment_from_schema(service_id, service_config, schema)
+                if environment:
+                    compose_service["environment"] = environment
+        except Exception as e:
+            console.print(f"[yellow]Warning: Failed to build environment for {service_id}: {e}[/yellow]")
         
-        # Add ports
-        if schema.compose.ports:
-            ports = self._build_ports_from_schema(service_config, schema)
-            if ports:
-                compose_service["ports"] = ports
+        try:
+            # Add ports
+            if schema.compose.ports:
+                ports = self._build_ports_from_schema(service_config, schema)
+                if ports:
+                    compose_service["ports"] = ports
+        except Exception as e:
+            console.print(f"[yellow]Warning: Failed to build ports for {service_id}: {e}[/yellow]")
         
-        # Add volumes
-        if schema.compose.volumes:
-            volumes = self._build_volumes_from_schema(service_id, service_config, schema)
-            if volumes:
-                compose_service["volumes"] = volumes
-                self._register_volumes(service_id, volumes)
+        try:
+            # Add volumes
+            if schema.compose.volumes:
+                volumes = self._build_volumes_from_schema(service_id, service_config, schema)
+                if volumes:
+                    compose_service["volumes"] = volumes
+                    self._register_volumes(service_id, volumes)
+        except Exception as e:
+            console.print(f"[yellow]Warning: Failed to build volumes for {service_id}: {e}[/yellow]")
         
-        # Add labels (especially Traefik)
-        if schema.compose.labels:
-            labels = self._build_labels_from_schema(service_id, service_config, schema)
-            if labels:
-                compose_service["labels"] = labels
+        try:
+            # Add labels (especially Traefik)
+            if schema.compose.labels:
+                labels = self._build_labels_from_schema(service_id, service_config, schema)
+                if labels:
+                    compose_service["labels"] = labels
+        except Exception as e:
+            console.print(f"[yellow]Warning: Failed to build labels for {service_id}: {e}[/yellow]")
         
-        # Add dependencies
-        if schema.compose.depends_on:
-            depends_on = self._build_depends_on_from_schema(schema)
-            if depends_on:
-                compose_service["depends_on"] = depends_on
+        try:
+            # Add dependencies
+            if schema.compose.depends_on:
+                depends_on = self._build_depends_on_from_schema(schema)
+                if depends_on:
+                    compose_service["depends_on"] = depends_on
+        except Exception as e:
+            console.print(f"[yellow]Warning: Failed to build dependencies for {service_id}: {e}[/yellow]")
         
-        # Add health check
-        if schema.compose.healthcheck and service_config.get('healthcheck_enabled', True):
-            healthcheck = self._build_healthcheck_from_schema(schema)
-            if healthcheck:
-                compose_service["healthcheck"] = healthcheck
+        try:
+            # Add health check
+            if schema.compose.healthcheck and service_config.get('healthcheck_enabled', True):
+                healthcheck = self._build_healthcheck_from_schema(schema)
+                if healthcheck:
+                    compose_service["healthcheck"] = healthcheck
+        except Exception as e:
+            console.print(f"[yellow]Warning: Failed to build healthcheck for {service_id}: {e}[/yellow]")
         
         # Add any additional compose properties
-        if hasattr(schema.compose, 'command') and schema.compose.command:
-            compose_service["command"] = schema.compose.command
-        
-        if hasattr(schema.compose, 'cap_add') and schema.compose.cap_add:
-            compose_service["cap_add"] = schema.compose.cap_add
-        
-        if hasattr(schema.compose, 'privileged') and schema.compose.privileged:
-            compose_service["privileged"] = schema.compose.privileged
+        try:
+            if hasattr(schema.compose, 'command') and schema.compose.command:
+                compose_service["command"] = schema.compose.command
+            
+            if hasattr(schema.compose, 'cap_add') and schema.compose.cap_add:
+                compose_service["cap_add"] = schema.compose.cap_add
+            
+            if hasattr(schema.compose, 'privileged') and schema.compose.privileged:
+                compose_service["privileged"] = schema.compose.privileged
+        except Exception as e:
+            console.print(f"[yellow]Warning: Failed to add additional properties for {service_id}: {e}[/yellow]")
         
         return compose_service
     
@@ -216,19 +249,42 @@ class ComposeGenerator:
                     env_value = getattr(service_config, env_source.from_field)
                 elif isinstance(service_config, dict):
                     env_value = service_config.get(env_source.from_field)
+                    
+                    # If not in service config, try global env_vars
+                    if env_value is None:
+                        if hasattr(self.config, 'env_vars') and env_source.from_field.upper() in self.config.env_vars:
+                            env_value = f"${{{env_source.from_field.upper()}}}"
+                        elif isinstance(self.config, dict) and 'env_vars' in self.config:
+                            if env_source.from_field.upper() in self.config['env_vars']:
+                                env_value = f"${{{env_source.from_field.upper()}}}"
             
             elif env_source.from_service:
                 # Get value from another service (e.g., postgresql.host)
                 service_name, field = env_source.from_service.split('.', 1)
                 env_value = f"${service_name.upper()}_{field.upper()}"
             
-            elif env_source.from_secret:
-                # Use environment variable reference
-                env_value = f"${env_source.from_secret}"
+            elif env_source.value:
+                # Use static literal value
+                env_value = env_source.value
             
-            elif env_source.from_literal:
-                # Use literal value
-                env_value = env_source.from_literal
+            elif env_source.template:
+                # Use template with variable substitution
+                env_value = self._substitute_template(env_source.template, service_id, service_config)
+            
+            elif env_source.value_map and env_source.from_field:
+                # Use value mapping based on field value
+                field_value = None
+                if hasattr(service_config, env_source.from_field):
+                    field_value = getattr(service_config, env_source.from_field)
+                elif isinstance(service_config, dict):
+                    field_value = service_config.get(env_source.from_field)
+                
+                if field_value and str(field_value) in env_source.value_map:
+                    env_value = env_source.value_map[str(field_value)]
+            
+            # Apply condition if present
+            if env_source.condition and not self._evaluate_condition(env_source.condition, service_config):
+                continue
             
             if env_value is not None:
                 environment.append(f"{env_key}={env_value}")
@@ -324,6 +380,76 @@ class ComposeGenerator:
         
         return healthcheck
     
+    def _substitute_template(self, template: str, service_id: str, service_config: Any) -> str:
+        """Substitute template variables with actual values"""
+        import re
+        result = template
+        
+        # Replace ${field} with service config values
+        if isinstance(service_config, dict):
+            for key, value in service_config.items():
+                result = result.replace(f"${{{key}}}", str(value))
+        elif hasattr(service_config, '__dict__'):
+            # Handle pydantic models
+            for key, value in service_config.__dict__.items():
+                result = result.replace(f"${{{key}}}", str(value))
+        
+        # Replace common template variables
+        result = result.replace("${service}", service_id)
+        result = result.replace("${SERVICE_ID}", service_id)
+        result = result.replace("${DOMAIN}", self._get_domain())
+        
+        # Handle environment variable references
+        env_pattern = r'\$\{ENV:([^}]+)\}'
+        env_matches = re.findall(env_pattern, result)
+        for env_var in env_matches:
+            if hasattr(self.config, 'env_vars') and env_var in self.config.env_vars:
+                result = result.replace(f"${{ENV:{env_var}}}", str(self.config.env_vars[env_var]))
+            elif isinstance(self.config, dict) and 'env_vars' in self.config and env_var in self.config['env_vars']:
+                result = result.replace(f"${{ENV:{env_var}}}", str(self.config['env_vars'][env_var]))
+        
+        return result
+    
+    def _evaluate_condition(self, condition: str, service_config: Any) -> bool:
+        """Evaluate simple conditions for environment variables"""
+        if not condition:
+            return True
+        
+        # Handle simple field existence checks
+        if condition.startswith('has_'):
+            field_name = condition[4:]  # Remove 'has_' prefix
+            if isinstance(service_config, dict):
+                return field_name in service_config and service_config[field_name] is not None
+            elif hasattr(service_config, field_name):
+                return getattr(service_config, field_name) is not None
+        
+        # Handle field value comparisons (field=value)
+        if '=' in condition:
+            field, expected_value = condition.split('=', 1)
+            if isinstance(service_config, dict):
+                actual_value = service_config.get(field)
+            elif hasattr(service_config, field):
+                actual_value = getattr(service_config, field)
+            else:
+                return False
+            return str(actual_value) == expected_value
+        
+        # Handle negation (!field)
+        if condition.startswith('!'):
+            field_name = condition[1:]
+            if isinstance(service_config, dict):
+                return not service_config.get(field_name)
+            elif hasattr(service_config, field_name):
+                return not getattr(service_config, field_name)
+        
+        # Default: check if field exists and is truthy
+        if isinstance(service_config, dict):
+            return bool(service_config.get(condition))
+        elif hasattr(service_config, condition):
+            return bool(getattr(service_config, condition))
+        
+        return True
+    
     def _get_custom_environment(self, service_id: str) -> Dict[str, str]:
         """Get custom environment variables for a service"""
         if isinstance(self.config, LabConfig):
@@ -382,6 +508,13 @@ class ComposeGenerator:
         """Save Docker Compose configuration to file"""
         compose_config = self.generate_compose()
         
+        # Validate compose configuration before saving
+        validation_errors = self._validate_compose_config(compose_config)
+        if validation_errors:
+            console.print("[yellow]⚠️  Compose validation warnings:[/yellow]")
+            for error in validation_errors:
+                console.print(f"  • {error}")
+        
         # Ensure directory exists
         file_path.parent.mkdir(parents=True, exist_ok=True)
         
@@ -434,3 +567,50 @@ class ComposeGenerator:
             env_vars.update(self.config.env_vars)
         
         return env_vars
+    
+    def _validate_compose_config(self, compose_config: Dict[str, Any]) -> List[str]:
+        """Validate generated compose configuration and return warnings"""
+        warnings = []
+        
+        services = compose_config.get('services', {})
+        
+        # Check for missing essential fields
+        for service_id, service in services.items():
+            if not service.get('image'):
+                warnings.append(f"Service '{service_id}' missing image specification")
+            
+            if not service.get('container_name'):
+                warnings.append(f"Service '{service_id}' missing container name")
+            
+            # Check for deprecated fields
+            if 'links' in service:
+                warnings.append(f"Service '{service_id}' uses deprecated 'links'. Use 'depends_on' instead")
+            
+            # Check port conflicts
+            ports = service.get('ports', [])
+            for port in ports:
+                if isinstance(port, str) and ':' in port:
+                    host_port = port.split(':')[0]
+                    if host_port.isdigit() and int(host_port) < 1024:
+                        warnings.append(f"Service '{service_id}' uses privileged port {host_port}")
+        
+        # Check for missing networks
+        networks = compose_config.get('networks', {})
+        if 'traefik' not in networks:
+            warnings.append("Missing 'traefik' network definition")
+        
+        # Check for orphaned volumes
+        volumes = compose_config.get('volumes', {})
+        used_volumes = set()
+        for service in services.values():
+            for vol in service.get('volumes', []):
+                if isinstance(vol, str) and ':' in vol:
+                    vol_name = vol.split(':')[0]
+                    if not vol_name.startswith('./') and not vol_name.startswith('/'):
+                        used_volumes.add(vol_name)
+        
+        for volume_name in volumes:
+            if volume_name not in used_volumes:
+                warnings.append(f"Volume '{volume_name}' defined but not used")
+        
+        return warnings

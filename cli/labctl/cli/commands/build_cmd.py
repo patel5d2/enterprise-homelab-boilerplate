@@ -10,9 +10,10 @@ from typing import List, Optional
 from rich.console import Console
 from rich.progress import Progress
 
-from ...core.config import Config
+from ...core.config import Config, LabConfig
 from ...core.exceptions import HomeLabError
 from ...core.compose import ComposeGenerator
+import yaml
 
 console = Console()
 
@@ -31,8 +32,18 @@ def run(
     if not config_path.exists():
         raise HomeLabError(f"Configuration file not found: {config_file}")
     
-    # Load configuration
-    config = Config.load_from_file(config_path)
+    # Load configuration (detect version and use appropriate loader)
+    with open(config_path, 'r') as f:
+        config_data = yaml.safe_load(f)
+    
+    config_version = config_data.get('version', 1)
+    
+    if config_version == 2:
+        config = LabConfig.load_from_file(config_path)
+        console.print(f"[dim]✓ Loaded v{config_version} configuration[/dim]")
+    else:
+        config = Config.load_from_file(config_path)
+        console.print(f"[dim]✓ Loaded v{config_version} (legacy) configuration[/dim]")
     
     # Set output directory
     if output_dir:
@@ -79,7 +90,7 @@ def run(
 
 
 
-def _show_next_steps(config: Config, output_path: Path) -> None:
+def _show_next_steps(config, output_path: Path) -> None:
     """Show next steps after build"""
     
     console.print("\n[bold]🎯 Next Steps:[/bold]")
@@ -90,8 +101,21 @@ def _show_next_steps(config: Config, output_path: Path) -> None:
     
     # Show service URLs that will be available
     console.print(f"\n[bold]🌐 Services (after deployment):[/bold]")
-    urls = config.get_service_urls()
-    for service, url in urls.items():
-        console.print(f"  • {service.title()}: {url}")
+    
+    # Handle both v1 and v2 configs
+    try:
+        if hasattr(config, 'get_service_urls'):
+            urls = config.get_service_urls()
+            for service, url in urls.items():
+                console.print(f"  • {service.title()}: {url}")
+        else:
+            # Fallback for configs without get_service_urls method
+            domain = getattr(config.core, 'domain', 'homelab.local')
+            if isinstance(config, LabConfig):
+                enabled_services = config.get_enabled_services()
+                for service_id in enabled_services.keys():
+                    console.print(f"  • {service_id.title()}: https://{service_id}.{domain}")
+    except Exception as e:
+        console.print(f"  [dim]Service URLs will be available after deployment[/dim]")
     
     console.print(f"\n[dim]💡 Deploy all services: docker compose -f {output_path}/docker-compose.yml up -d[/dim]")
