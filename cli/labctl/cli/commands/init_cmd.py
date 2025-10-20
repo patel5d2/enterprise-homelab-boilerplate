@@ -64,7 +64,7 @@ def run(
     
     try:
         # Load service schemas
-        schemas_path = config_path.parent.parent / "config" / "services"
+        schemas_path = config_path.parent.parent / "config" / "services-v2"
         service_schemas = load_service_schemas(str(schemas_path))
         
         if interactive and not non_interactive:
