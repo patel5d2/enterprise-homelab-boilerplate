@@ -1,0 +1,96 @@
+id: jenkins
+name: Jenkins
+category: DevOps
+description: Open source automation server for continuous integration and deployment
+maturity: stable
+required_capabilities: []
+dependencies: []
+fields:
+- key: enabled
+  label: Enable Jenkins
+  type: boolean
+  description: Enable Jenkins service
+  default: false
+  required: true
+- key: web_subdomain
+  label: Web Subdomain
+  type: string
+  description: Subdomain for web interface
+  default: jenkins
+- key: resources_memory_limit
+  label: Resources Memory Limit
+  type: string
+  description: Java heap memory limit
+  default: 2g
+- key: resources_cpu_limit
+  label: Resources Cpu Limit
+  type: string
+  description: CPU limit
+  default: '2'
+- key: security_admin_username
+  label: Security Admin Username
+  type: string
+  description: Initial admin username
+  default: admin
+- key: security_admin_password
+  label: Security Admin Password
+  type: password
+  description: Initial admin password
+  required: true
+  generate: true
+  length: 24
+- key: features_enable_agents
+  label: Features Enable Agents
+  type: boolean
+  description: Enable Jenkins agents
+  default: true
+- key: features_max_agents
+  label: Features Max Agents
+  type: integer
+  description: Maximum number of agents
+  default: 5
+- key: features_enable_docker_plugin
+  label: Features Enable Docker Plugin
+  type: boolean
+  description: Enable Docker plugin for container builds
+  default: true
+- key: backup_enabled
+  label: Backup Enabled
+  type: boolean
+  description: Enable automated backups
+  default: true
+- key: backup_schedule
+  label: Backup Schedule
+  type: string
+  description: Backup schedule (cron format)
+  default: H 2 * * 0
+compose:
+  image: jenkins/jenkins:lts
+  container_name: jenkins
+  restart: unless-stopped
+  ports:
+  - 8085:8080
+  - 50000:50000
+  volumes:
+  - jenkins-data:/var/jenkins_home
+  - /var/run/docker.sock:/var/run/docker.sock:rw
+  - jenkins-backup:/backup
+  networks:
+  - traefik
+  environment:
+  - key: JENKINS_OPTS
+    value: --httpPort=8080 --prefix=/jenkins
+  - key: JAVA_OPTS
+    value: -Djenkins.install.runSetupWizard=false -Xmx${MEMORY_LIMIT}
+  - key: TZ
+    value: ${TIMEZONE}
+  labels:
+  - traefik.enable=true
+  - traefik.http.routers.jenkins.rule=Host(`jenkins.${DOMAIN}`)
+  - traefik.http.routers.jenkins.tls.certresolver=letsencrypt
+  - traefik.http.services.jenkins.loadbalancer.server.port=8080
+defaults:
+  dev:
+    enabled: false
+  prod:
+    enabled: false

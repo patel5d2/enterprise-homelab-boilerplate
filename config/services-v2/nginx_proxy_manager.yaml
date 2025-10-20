@@ -1,0 +1,89 @@
+id: nginx_proxy_manager
+name: Nginx Proxy Manager
+category: Networking
+description: Web-based reverse proxy management with automatic SSL certificates
+maturity: stable
+required_capabilities: []
+dependencies: []
+fields:
+- key: enabled
+  label: Enable Nginx Proxy Manager
+  type: boolean
+  description: Enable Nginx Proxy Manager service
+  default: false
+  required: true
+- key: web_admin_port
+  label: Web Admin Port
+  type: integer
+  description: Admin interface port
+  default: 81
+- key: web_subdomain
+  label: Web Subdomain
+  type: string
+  description: Subdomain for admin interface
+  default: proxy
+- key: ssl_default_email
+  label: Ssl Default Email
+  type: string
+  description: Default email for SSL certificates
+  required: true
+- key: ssl_use_letsencrypt
+  label: Ssl Use Letsencrypt
+  type: boolean
+  description: Enable Let's Encrypt integration
+  default: true
+- key: ssl_staging
+  label: Ssl Staging
+  type: boolean
+  description: Use Let's Encrypt staging environment
+  default: false
+- key: security_initial_admin_email
+  label: Security Initial Admin Email
+  type: string
+  description: Initial admin email
+  default: admin@${DOMAIN}
+- key: security_initial_admin_password
+  label: Security Initial Admin Password
+  type: password
+  description: Initial admin password
+  required: true
+  generate: true
+  length: 24
+- key: features_enable_access_lists
+  label: Features Enable Access Lists
+  type: boolean
+  description: Enable access control lists
+  default: true
+- key: features_enable_custom_locations
+  label: Features Enable Custom Locations
+  type: boolean
+  description: Enable custom location blocks
+  default: true
+- key: features_enable_advanced_config
+  label: Features Enable Advanced Config
+  type: boolean
+  description: Enable advanced nginx configuration
+  default: false
+compose:
+  image: jc21/nginx-proxy-manager:latest
+  container_name: nginx-proxy-manager
+  restart: unless-stopped
+  ports:
+  - 80:80
+  - 443:443
+  - 81:81
+  volumes:
+  - nginx-proxy-data:/data
+  - nginx-proxy-letsencrypt:/etc/letsencrypt
+  networks:
+  - traefik
+  environment:
+  - key: DISABLE_IPV6
+    value: 'true'
+  - key: TZ
+    value: ${TIMEZONE}
+defaults:
+  dev:
+    enabled: false
+  prod:
+    enabled: false

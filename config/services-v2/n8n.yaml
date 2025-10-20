@@ -1,0 +1,88 @@
+id: n8n
+name: n8n
+category: Automation
+description: Visual workflow automation platform for connecting apps and services
+maturity: stable
+required_capabilities: []
+dependencies:
+- postgresql
+- redis
+fields:
+- key: enabled
+  label: Enable n8n
+  type: boolean
+  description: Enable n8n service
+  default: false
+  required: true
+- key: web_subdomain
+  label: Subdomain
+  type: string
+  default: n8n
+  description: Subdomain for web interface
+- key: basic_auth_enabled
+  label: Basic Auth Enabled
+  type: boolean
+  default: true
+  description: Enable basic authentication
+- key: basic_auth_user
+  label: Basic Auth Username
+  type: string
+  default: admin
+  description: Basic auth username
+- key: basic_auth_password
+  label: Basic Auth Password
+  type: password
+  required: true
+  description: Basic auth password
+  generate: true
+  length: 24
+- key: encryption_key
+  label: Encryption Key
+  type: password
+  required: true
+  description: Encryption key for sensitive data
+  generate: true
+  length: 32
+compose:
+  image: n8nio/n8n:latest
+  container_name: n8n
+  restart: unless-stopped
+  ports:
+  - 5678:5678
+  volumes:
+  - n8n-data:/home/node/.n8n
+  networks:
+  - traefik
+  environment:
+  - key: N8N_HOST
+    value: n8n.{domain}
+  - key: N8N_PORT
+    value: '5678'
+  - key: N8N_PROTOCOL
+    value: https
+  - key: WEBHOOK_URL
+    value: https://n8n.{domain}/
+  - key: N8N_BASIC_AUTH_ACTIVE
+    from_field: basic_auth_enabled
+  - key: N8N_BASIC_AUTH_USER
+    from_field: basic_auth_user
+  - key: N8N_BASIC_AUTH_PASSWORD
+    from_field: basic_auth_password
+  - key: N8N_ENCRYPTION_KEY
+    from_field: encryption_key
+  - key: DB_TYPE
+    value: postgres
+  - key: DB_POSTGRESDB_HOST
+    value: postgres
+  - key: DB_POSTGRESDB_DATABASE
+    value: n8n
+  labels:
+  - traefik.enable=true
+  - traefik.http.routers.n8n.rule=Host(`n8n.{domain}`)
+  - traefik.http.routers.n8n.tls.certresolver=letsencrypt
+  - traefik.http.services.n8n.loadbalancer.server.port=5678
+defaults:
+  dev:
+    enabled: false
+  prod:
+    enabled: false

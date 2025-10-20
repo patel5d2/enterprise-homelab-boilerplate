@@ -1,0 +1,25 @@
+id: gitlab
+name: Gitlab
+category: DevOps
+description: gitlab service
+maturity: stable
+required_capabilities: []
+dependencies:
+- postgresql
+- redis
+fields:
+- key: enabled
+  label: Enable Gitlab
+  type: boolean
+  description: Enable Gitlab service
+  default: true
+  required: true
+compose:
+  image: gitlab:latest
+  container_name: gitlab
+  restart: unless-stopped
+defaults:
+  dev:
+    enabled: true
+  prod:
+    enabled: true

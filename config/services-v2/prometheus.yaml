@@ -1,0 +1,76 @@
+id: prometheus
+name: Prometheus
+category: Observability
+description: Time-series database and monitoring system for metrics collection
+maturity: stable
+required_capabilities: []
+dependencies: []
+fields:
+- key: enabled
+  label: Enable Prometheus
+  type: boolean
+  description: Enable Prometheus service
+  default: true
+  required: true
+- key: storage_retention_time
+  label: Storage Retention Time
+  type: string
+  description: How long to retain metrics data
+  default: 30d
+- key: storage_retention_size
+  label: Storage Retention Size
+  type: string
+  description: Maximum storage size for metrics
+  default: 10GB
+- key: scraping_global_interval
+  label: Scraping Global Interval
+  type: string
+  description: Global scrape interval
+  default: 15s
+- key: scraping_timeout
+  label: Scraping Timeout
+  type: string
+  description: Scrape timeout
+  default: 10s
+- key: web_subdomain
+  label: Web Subdomain
+  type: string
+  description: Subdomain for web interface
+  default: prometheus
+- key: web_enable_auth
+  label: Web Enable Auth
+  type: boolean
+  description: Enable authentication for web interface
+  default: true
+compose:
+  image: prom/prometheus:latest
+  container_name: prometheus
+  restart: unless-stopped
+  ports:
+  - 9090:9090
+  volumes:
+  - prometheus-data:/prometheus
+  - prometheus-config:/etc/prometheus
+  networks:
+  - traefik
+  environment:
+  - key: TZ
+    value: ${TIMEZONE}
+  command:
+  - --config.file=/etc/prometheus/prometheus.yml
+  - --storage.tsdb.path=/prometheus
+  - --web.console.libraries=/etc/prometheus/console_libraries
+  - --web.console.templates=/etc/prometheus/consoles
+  - --storage.tsdb.retention.time=${RETENTION_TIME}
+  - --web.enable-lifecycle
+  - --web.external-url=https://prometheus.${DOMAIN}
+  labels:
+  - traefik.enable=true
+  - traefik.http.routers.prometheus.rule=Host(`prometheus.${DOMAIN}`)
+  - traefik.http.routers.prometheus.tls.certresolver=letsencrypt
+  - traefik.http.services.prometheus.loadbalancer.server.port=9090
+defaults:
+  dev:
+    enabled: true
+  prod:
+    enabled: true

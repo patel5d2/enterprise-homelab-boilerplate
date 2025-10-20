@@ -1,0 +1,96 @@
+id: grafana
+name: Grafana
+category: Observability
+description: Beautiful dashboards and visualization for monitoring data
+maturity: stable
+required_capabilities: []
+dependencies:
+- prometheus
+fields:
+- key: enabled
+  label: Enable Grafana
+  type: boolean
+  description: Enable Grafana service
+  default: true
+  required: true
+- key: admin_username
+  label: Admin Username
+  type: string
+  description: Admin username
+  default: admin
+- key: admin_password
+  label: Admin Password
+  type: password
+  description: Admin password
+  required: true
+  generate: true
+  length: 24
+- key: web_subdomain
+  label: Web Subdomain
+  type: string
+  description: Subdomain for web interface
+  default: grafana
+- key: security_allow_signup
+  label: Security Allow Signup
+  type: boolean
+  description: Allow user self-registration
+  default: false
+- key: security_anonymous_access
+  label: Security Anonymous Access
+  type: boolean
+  description: Enable anonymous access
+  default: false
+- key: plugins_enabled
+  label: Plugins Enabled
+  type: multiselect
+  description: Grafana plugins to install
+  default:
+  - grafana-piechart-panel
+  - grafana-clock-panel
+  choices:
+  - grafana-piechart-panel
+  - grafana-worldmap-panel
+  - grafana-clock-panel
+  - grafana-simple-json-datasource
+  - alexanderzobnin-zabbix-app
+- key: datasources_prometheus_url
+  label: Datasources Prometheus Url
+  type: string
+  description: Prometheus datasource URL
+  default: http://prometheus:9090
+compose:
+  image: grafana/grafana:latest
+  container_name: grafana
+  restart: unless-stopped
+  ports:
+  - 3000:3000
+  volumes:
+  - grafana-data:/var/lib/grafana
+  - grafana-config:/etc/grafana
+  networks:
+  - traefik
+  environment:
+  - key: GF_SECURITY_ADMIN_USER
+    value: ${GRAFANA_ADMIN_USER}
+  - key: GF_SECURITY_ADMIN_PASSWORD
+    value: ${GRAFANA_ADMIN_PASSWORD}
+  - key: GF_SERVER_ROOT_URL
+    value: https://grafana.${DOMAIN}
+  - key: GF_SERVER_DOMAIN
+    value: grafana.${DOMAIN}
+  - key: GF_INSTALL_PLUGINS
+    value: ${GRAFANA_PLUGINS}
+  - key: GF_USERS_ALLOW_SIGN_UP
+    value: 'false'
+  - key: TZ
+    value: ${TIMEZONE}
+  labels:
+  - traefik.enable=true
+  - traefik.http.routers.grafana.rule=Host(`grafana.${DOMAIN}`)
+  - traefik.http.routers.grafana.tls.certresolver=letsencrypt
+  - traefik.http.services.grafana.loadbalancer.server.port=3000
+defaults:
+  dev:
+    enabled: true
+  prod:
+    enabled: true

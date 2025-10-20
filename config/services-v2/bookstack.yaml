@@ -1,0 +1,115 @@
+id: bookstack
+name: BookStack
+category: Productivity
+description: Self-hosted documentation and wiki platform with rich editing features
+maturity: stable
+required_capabilities: []
+dependencies:
+- postgresql
+fields:
+- key: enabled
+  label: Enable BookStack
+  type: boolean
+  description: Enable BookStack service
+  default: false
+  required: true
+- key: web_subdomain
+  label: Web Subdomain
+  type: string
+  description: Subdomain for documentation site
+  default: docs
+- key: database_password
+  label: Database Password
+  type: password
+  description: Database password
+  required: true
+  generate: true
+  length: 24
+- key: features_enable_registration
+  label: Features Enable Registration
+  type: boolean
+  description: Allow user self-registration
+  default: false
+- key: features_default_theme
+  label: Features Default Theme
+  type: string
+  description: Default theme
+  default: default
+  choices:
+  - default
+  - dark
+- key: features_enable_ldap
+  label: Features Enable Ldap
+  type: boolean
+  description: Enable LDAP authentication
+  default: false
+- key: email_mail_driver
+  label: Email Mail Driver
+  type: string
+  description: Email driver
+  default: smtp
+  choices:
+  - smtp
+  - sendmail
+  - log
+- key: email_mail_host
+  label: Email Mail Host
+  type: string
+  description: SMTP host
+  default: ''
+- key: email_mail_port
+  label: Email Mail Port
+  type: integer
+  description: SMTP port
+  default: 587
+- key: email_mail_username
+  label: Email Mail Username
+  type: string
+  description: SMTP username
+  default: ''
+- key: email_mail_password
+  label: Email Mail Password
+  type: password
+  description: SMTP password
+  default: ''
+  generate: true
+  length: 24
+compose:
+  image: lscr.io/linuxserver/bookstack:latest
+  container_name: bookstack
+  restart: unless-stopped
+  ports:
+  - 8087:80
+  volumes:
+  - bookstack-data:/config
+  networks:
+  - traefik
+  environment:
+  - key: PUID
+    value: '1000'
+  - key: PGID
+    value: '1000'
+  - key: APP_URL
+    value: https://docs.${DOMAIN}
+  - key: DB_HOST
+    value: bookstack-db
+  - key: DB_PORT
+    value: '3306'
+  - key: DB_USER
+    value: bookstack
+  - key: DB_PASS
+    value: ${BOOKSTACK_DB_PASSWORD}
+  - key: DB_DATABASE
+    value: bookstack
+  - key: TZ
+    value: ${TIMEZONE}
+  labels:
+  - traefik.enable=true
+  - traefik.http.routers.bookstack.rule=Host(`docs.${DOMAIN}`)
+  - traefik.http.routers.bookstack.tls.certresolver=letsencrypt
+  - traefik.http.services.bookstack.loadbalancer.server.port=80
+defaults:
+  dev:
+    enabled: false
+  prod:
+    enabled: false

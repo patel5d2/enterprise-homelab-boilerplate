@@ -1,0 +1,83 @@
+id: mongodb
+name: MongoDB
+category: Core Infrastructure
+description: High-performance document-oriented NoSQL database
+maturity: stable
+required_capabilities: []
+dependencies: []
+fields:
+- key: enabled
+  label: Enable MongoDB
+  type: boolean
+  description: Enable MongoDB service
+  default: false
+  required: true
+- key: database_root_username
+  label: Database Root Username
+  type: string
+  description: Root username for MongoDB
+  default: admin
+- key: database_root_password
+  label: Database Root Password
+  type: password
+  description: Root password for MongoDB
+  required: true
+  generate: true
+  length: 24
+- key: database_init_database
+  label: Database Init Database
+  type: string
+  description: Initial database name
+  default: homelab
+- key: performance_cache_size
+  label: Performance Cache Size
+  type: string
+  description: WiredTiger cache size
+  default: 1GB
+- key: performance_max_connections
+  label: Performance Max Connections
+  type: integer
+  description: Maximum number of connections
+  default: 1000
+- key: backup_enabled
+  label: Backup Enabled
+  type: boolean
+  description: Enable automated backups
+  default: true
+- key: backup_schedule
+  label: Backup Schedule
+  type: string
+  description: Backup schedule (cron format)
+  default: 0 3 * * *
+- key: backup_retention_days
+  label: Backup Retention Days
+  type: integer
+  description: Number of days to keep backups
+  default: 30
+compose:
+  image: mongo:7
+  container_name: mongodb
+  restart: unless-stopped
+  ports:
+  - 27017:27017
+  volumes:
+  - mongodb-data:/data/db
+  - mongodb-config:/data/configdb
+  - mongodb-backups:/backups
+  networks:
+  - traefik
+  environment:
+  - key: MONGO_INITDB_ROOT_USERNAME
+    value: ${MONGO_ROOT_USERNAME}
+  - key: MONGO_INITDB_ROOT_PASSWORD
+    value: ${MONGO_ROOT_PASSWORD}
+  - key: MONGO_INITDB_DATABASE
+    value: ${MONGO_INITDB_DATABASE}
+  - key: TZ
+    value: ${TIMEZONE}
+  command: mongod --auth --bind_ip_all
+defaults:
+  dev:
+    enabled: false
+  prod:
+    enabled: false

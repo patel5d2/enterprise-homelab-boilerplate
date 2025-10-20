@@ -1,0 +1,100 @@
+id: uptime_kuma
+name: Uptime Kuma
+category: Monitoring
+description: Beautiful and modern uptime monitoring with notifications
+maturity: stable
+required_capabilities: []
+dependencies: []
+fields:
+- key: enabled
+  label: Enable Uptime Kuma
+  type: boolean
+  description: Enable Uptime Kuma service
+  default: false
+  required: true
+- key: web_subdomain
+  label: Web Subdomain
+  type: string
+  description: Subdomain for web interface
+  default: uptime
+- key: monitoring_check_interval
+  label: Monitoring Check Interval
+  type: integer
+  description: Default check interval in seconds
+  default: 60
+- key: monitoring_retry_interval
+  label: Monitoring Retry Interval
+  type: integer
+  description: Retry interval for failed checks
+  default: 60
+- key: monitoring_resend_interval
+  label: Monitoring Resend Interval
+  type: integer
+  description: Resend interval for notifications (0 = disabled)
+  default: 0
+- key: notifications_enable_discord
+  label: Notifications Enable Discord
+  type: boolean
+  description: Enable Discord notifications
+  default: false
+- key: notifications_discord_webhook
+  label: Notifications Discord Webhook
+  type: string
+  description: Discord webhook URL
+  default: ''
+- key: notifications_enable_slack
+  label: Notifications Enable Slack
+  type: boolean
+  description: Enable Slack notifications
+  default: false
+- key: notifications_slack_webhook
+  label: Notifications Slack Webhook
+  type: string
+  description: Slack webhook URL
+  default: ''
+- key: notifications_enable_telegram
+  label: Notifications Enable Telegram
+  type: boolean
+  description: Enable Telegram notifications
+  default: false
+- key: notifications_telegram_bot_token
+  label: Notifications Telegram Bot Token
+  type: string
+  description: Telegram bot token
+  default: ''
+- key: notifications_telegram_chat_id
+  label: Notifications Telegram Chat Id
+  type: string
+  description: Telegram chat ID
+  default: ''
+- key: docker_enable_docker_monitoring
+  label: Docker Enable Docker Monitoring
+  type: boolean
+  description: Enable Docker container monitoring
+  default: false
+compose:
+  image: louislam/uptime-kuma:1
+  container_name: uptime-kuma
+  restart: unless-stopped
+  ports:
+  - 3001:3001
+  volumes:
+  - uptime-kuma-data:/app/data
+  - /var/run/docker.sock:/var/run/docker.sock:ro
+  networks:
+  - traefik
+  environment:
+  - key: TZ
+    value: ${TIMEZONE}
+  - key: PORT
+    value: '3001'
+  labels:
+  - traefik.enable=true
+  - traefik.http.routers.uptime-kuma.rule=Host(`uptime.${DOMAIN}`)
+  - traefik.http.routers.uptime-kuma.tls.certresolver=letsencrypt
+  - traefik.http.services.uptime-kuma.loadbalancer.server.port=3001
+defaults:
+  dev:
+    enabled: false
+  prod:
+    enabled: false

@@ -1,0 +1,77 @@
+id: glance
+name: Glance Dashboard
+category: Dashboard
+description: Beautiful and minimal dashboard for your home lab services
+maturity: stable
+required_capabilities: []
+dependencies: []
+fields:
+- key: enabled
+  label: Enable Glance Dashboard
+  type: boolean
+  description: Enable Glance Dashboard service
+  default: false
+  required: true
+- key: web_subdomain
+  label: Web Subdomain
+  type: string
+  description: Subdomain for dashboard
+  default: dashboard
+- key: theme_color_scheme
+  label: Theme Color Scheme
+  type: string
+  description: Dashboard color scheme
+  default: auto
+  choices:
+  - light
+  - dark
+  - auto
+- key: widgets_enable_weather
+  label: Widgets Enable Weather
+  type: boolean
+  description: Enable weather widget
+  default: true
+- key: widgets_weather_location
+  label: Widgets Weather Location
+  type: string
+  description: Location for weather widget
+  default: New York
+- key: widgets_enable_bookmarks
+  label: Widgets Enable Bookmarks
+  type: boolean
+  description: Enable bookmarks widget
+  default: true
+- key: widgets_enable_calendar
+  label: Widgets Enable Calendar
+  type: boolean
+  description: Enable calendar widget
+  default: false
+- key: widgets_enable_rss
+  label: Widgets Enable Rss
+  type: boolean
+  description: Enable RSS feed widget
+  default: false
+compose:
+  image: glanceapp/glance:latest
+  container_name: glance
+  restart: unless-stopped
+  ports:
+  - 8082:8080
+  volumes:
+  - glance-data:/app/data
+  - glance-config:/app/config
+  networks:
+  - traefik
+  environment:
+  - key: TZ
+    value: ${TIMEZONE}
+  labels:
+  - traefik.enable=true
+  - traefik.http.routers.glance.rule=Host(`dashboard.${DOMAIN}`)
+  - traefik.http.routers.glance.tls.certresolver=letsencrypt
+  - traefik.http.services.glance.loadbalancer.server.port=8080
+defaults:
+  dev:
+    enabled: false
+  prod:
+    enabled: false
