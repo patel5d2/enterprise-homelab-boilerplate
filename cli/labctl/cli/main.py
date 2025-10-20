@@ -119,7 +119,7 @@ def init_command(
             force=force,
         )
     except HomeLabError as e:
-        console.print(f"[red]Error:[/red] {e.message}", err=True)
+        console.print(f"[red]Error:[/red] {e.message}")
         raise typer.Exit(1)
     except KeyboardInterrupt:
         console.print("\n[yellow]Operation cancelled[/yellow]")
@@ -143,7 +143,7 @@ def validate_command(
     try:
         validate_cmd.run(config_file=config_file, strict=strict)
     except HomeLabError as e:
-        console.print(f"[red]Validation failed:[/red] {e.message}", err=True)
+        console.print(f"[red]Validation failed:[/red] {e.message}")
         if hasattr(e, 'errors') and e.errors:
             for error in e.errors:
                 console.print(f"  • [red]{error.get('path', 'unknown')}[/red]: {error.get('message', '')}")
@@ -184,7 +184,7 @@ def build_command(
             force=force,
         )
     except HomeLabError as e:
-        console.print(f"[red]Build failed:[/red] {e.message}", err=True)
+        console.print(f"[red]Build failed:[/red] {e.message}")
         raise typer.Exit(1)
 
 
@@ -233,7 +233,7 @@ def deploy_command(
             timeout=timeout,
         )
     except HomeLabError as e:
-        console.print(f"[red]Deployment failed:[/red] {e.message}", err=True)
+        console.print(f"[red]Deployment failed:[/red] {e.message}")
         raise typer.Exit(1)
 
 
@@ -271,7 +271,7 @@ def status_command(
             watch=watch,
         )
     except HomeLabError as e:
-        console.print(f"[red]Error:[/red] {e.message}", err=True)
+        console.print(f"[red]Error:[/red] {e.message}")
         raise typer.Exit(1)
 
 
@@ -315,7 +315,7 @@ def logs_command(
             tail=tail,
         )
     except HomeLabError as e:
-        console.print(f"[red]Error:[/red] {e.message}", err=True)
+        console.print(f"[red]Error:[/red] {e.message}")
         raise typer.Exit(1)
 
 
@@ -358,7 +358,7 @@ def stop_command(
             remove_images=images,
         )
     except HomeLabError as e:
-        console.print(f"[red]Stop failed:[/red] {e.message}", err=True)
+        console.print(f"[red]Stop failed:[/red] {e.message}")
         raise typer.Exit(1)
 
 
@@ -400,7 +400,7 @@ def config_command(
             format=format,
         )
     except HomeLabError as e:
-        console.print(f"[red]Error:[/red] {e.message}", err=True)
+        console.print(f"[red]Error:[/red] {e.message}")
         raise typer.Exit(1)
 
 
@@ -432,22 +432,22 @@ def handle_exception(exc_type, exc_value, exc_traceback):
         return
     
     if isinstance(exc_value, HomeLabError):
-        console.print(f"[red]Error [{exc_value.code}]:[/red] {exc_value.message}", err=True)
+        console.print(f"[red]Error [{exc_value.code}]:[/red] {exc_value.message}")
         
         if exc_value.details:
-            console.print("[dim]Details:[/dim]", err=True)
+            console.print("[dim]Details:[/dim]")
             for key, value in exc_value.details.items():
-                console.print(f"  {key}: {value}", err=True)
+                console.print(f"  {key}: {value}")
         return
     
     # For unexpected exceptions, show more detail in debug mode
     if os.getenv("LABCTL_DEBUG"):
         import traceback
-        console.print("[red]Unexpected error occurred:[/red]", err=True)
-        console.print(traceback.format_exception(exc_type, exc_value, exc_traceback), err=True)
+        console.print("[red]Unexpected error occurred:[/red]")
+        console.print(traceback.format_exception(exc_type, exc_value, exc_traceback))
     else:
-        console.print(f"[red]Unexpected error:[/red] {exc_value}", err=True)
-        console.print("[dim]Run with --debug for more details[/dim]", err=True)
+        console.print(f"[red]Unexpected error:[/red] {exc_value}")
+        console.print("[dim]Run with --debug for more details[/dim]")
 
 
 # Set global exception handler

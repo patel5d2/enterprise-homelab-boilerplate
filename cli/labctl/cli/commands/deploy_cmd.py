@@ -41,7 +41,7 @@ def run(
     if compose_dir:
         compose_path = Path(compose_dir)
     else:
-        compose_path = config_path.parent
+        compose_path = config_path.parent / "compose"
     
     compose_file = compose_path / "docker-compose.yml"
     if not compose_file.exists():

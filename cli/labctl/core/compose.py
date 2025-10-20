@@ -632,7 +632,3 @@ class ComposeGenerator:
                 "networks": ["traefik"]
             }
             self.volumes["jenkins-data"] = None
-        
-        with open(output_path, 'w') as f:
-            for key, value in env_vars.items():
-                f.write(f"{key}={value}\n")
