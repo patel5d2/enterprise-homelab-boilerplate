@@ -1,0 +1,349 @@
+# Monitoring Stack - Service Schema v2
+id: monitoring
+name: Monitoring Stack
+category: Monitoring & Observability
+description: Prometheus, Grafana, and AlertManager for comprehensive monitoring
+maturity: stable
+required_capabilities: []
+dependencies: []
+
+fields:
+  - key: enabled
+    label: Enable monitoring stack
+    type: boolean
+    description: Enable Prometheus + Grafana + AlertManager monitoring
+    default: true
+
+  - key: prometheus_port
+    label: Prometheus port (internal)
+    type: integer
+    description: Internal port for Prometheus server
+    default: 9090
+    min: 1024
+    max: 65535
+
+  - key: grafana_port
+    label: Grafana port (internal)
+    type: integer
+    description: Internal port for Grafana web interface
+    default: 3000
+    min: 1024
+    max: 65535
+
+  - key: prometheus_subdomain
+    label: Prometheus subdomain
+    type: string
+    description: Subdomain for Prometheus web interface
+    default: prometheus
+    required: true
+    validate_regex: '^[a-zA-Z0-9][a-zA-Z0-9-]*[a-zA-Z0-9]*$'
+
+  - key: grafana_subdomain
+    label: Grafana subdomain
+    type: string
+    description: Subdomain for Grafana web interface
+    default: grafana
+    required: true
+    validate_regex: '^[a-zA-Z0-9][a-zA-Z0-9-]*[a-zA-Z0-9]*$'
+
+  - key: retention_days
+    label: Data retention (days)
+    type: integer
+    description: Number of days to keep metrics data
+    default: 30
+    min: 1
+    max: 365
+
+  - key: scrape_interval
+    label: Scrape interval
+    type: choice
+    description: How often to scrape metrics from targets
+    default: 15s
+    choices:
+      - 5s
+      - 15s
+      - 30s
+      - 60s
+
+  - key: grafana_admin_user
+    label: Grafana admin username
+    type: string
+    description: Grafana administrator username
+    default: admin
+    required: true
+    validate_regex: '^[a-zA-Z0-9_]+$'
+
+  - key: grafana_admin_password
+    label: Grafana admin password
+    type: password
+    description: Grafana administrator password
+    required: true
+    generate: true
+    length: 24
+
+  - key: enable_alertmanager
+    label: Enable AlertManager
+    type: boolean
+    description: Enable AlertManager for alert routing and management
+    default: true
+
+  - key: alertmanager_port
+    label: AlertManager port (internal)
+    type: integer
+    description: Internal port for AlertManager
+    default: 9093
+    show_if: 'enable_alertmanager == true'
+    min: 1024
+    max: 65535
+
+  - key: alertmanager_subdomain
+    label: AlertManager subdomain
+    type: string
+    description: Subdomain for AlertManager web interface
+    default: alerts
+    show_if: 'enable_alertmanager == true'
+    validate_regex: '^[a-zA-Z0-9][a-zA-Z0-9-]*[a-zA-Z0-9]*$'
+
+  - key: smtp_smarthost
+    label: SMTP server for alerts
+    type: string
+    description: SMTP server for sending email alerts (optional)
+    placeholder: smtp.gmail.com:587
+
+  - key: smtp_from
+    label: Alert from email
+    type: string
+    description: From email address for alerts
+    placeholder: alerts@example.com
+    show_if: 'smtp_smarthost != ""'
+    validate_regex: '^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$'
+
+  - key: smtp_auth_username
+    label: SMTP username
+    type: string
+    description: SMTP username for authentication
+    show_if: 'smtp_smarthost != ""'
+
+  - key: smtp_auth_password
+    label: SMTP password
+    type: password
+    description: SMTP password for authentication
+    show_if: 'smtp_smarthost != ""'
+    mask: true
+
+  - key: enable_node_exporter
+    label: Enable Node Exporter
+    type: boolean
+    description: Enable Node Exporter for system metrics
+    default: true
+
+  - key: enable_cadvisor
+    label: Enable cAdvisor
+    type: boolean
+    description: Enable cAdvisor for container metrics
+    default: true
+
+  - key: custom_dashboards
+    label: Install custom dashboards
+    type: multiselect
+    description: Additional dashboards to install
+    default: [docker, system, traefik]
+    choices:
+      - docker        # Docker container metrics
+      - system        # System resource metrics
+      - traefik       # Traefik reverse proxy metrics
+      - postgresql    # PostgreSQL database metrics
+      - redis         # Redis metrics
+      - nginx         # Nginx metrics
+
+compose:
+  # Prometheus
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: prometheus
+    restart: unless-stopped
+    
+    ports:
+      - "${prometheus_port}:9090"
+    
+    volumes:
+      - prometheus_data:/prometheus
+      - prometheus_config:/etc/prometheus
+    
+    networks:
+      - traefik
+    
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--web.console.libraries=/etc/prometheus/console_libraries'
+      - '--web.console.templates=/etc/prometheus/consoles'
+      - '--storage.tsdb.retention.time=${retention_days}d'
+      - '--web.enable-lifecycle'
+      - '--web.enable-admin-api'
+    
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.prometheus.rule=Host(`${prometheus_subdomain}.${global:domain}`)"
+      - "traefik.http.routers.prometheus.tls.certresolver=letsencrypt"
+      - "traefik.http.services.prometheus.loadbalancer.server.port=9090"
+    
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:9090/-/healthy"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+
+  # Grafana
+  grafana:
+    image: grafana/grafana:latest
+    container_name: grafana
+    restart: unless-stopped
+    
+    ports:
+      - "${grafana_port}:3000"
+    
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - grafana_provisioning:/etc/grafana/provisioning
+    
+    networks:
+      - traefik
+    
+    environment:
+      - key: GF_SECURITY_ADMIN_USER
+        from_field: grafana_admin_user
+      - key: GF_SECURITY_ADMIN_PASSWORD
+        from_field: grafana_admin_password
+      - key: GF_SERVER_DOMAIN
+        template: "${grafana_subdomain}.${global:domain}"
+      - key: GF_SERVER_ROOT_URL
+        template: "https://${grafana_subdomain}.${global:domain}"
+      - key: GF_INSTALL_PLUGINS
+        value: "grafana-clock-panel,grafana-simple-json-datasource,grafana-worldmap-panel"
+      - key: GF_SMTP_ENABLED
+        template: "${if:smtp_smarthost}true${else}false${endif}"
+      - key: GF_SMTP_HOST
+        from_field: smtp_smarthost
+        condition: 'smtp_smarthost != ""'
+      - key: GF_SMTP_USER
+        from_field: smtp_auth_username
+        condition: 'smtp_smarthost != ""'
+      - key: GF_SMTP_PASSWORD
+        from_field: smtp_auth_password
+        condition: 'smtp_smarthost != ""'
+      - key: GF_SMTP_FROM_ADDRESS
+        from_field: smtp_from
+        condition: 'smtp_smarthost != ""'
+    
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.grafana.rule=Host(`${grafana_subdomain}.${global:domain}`)"
+      - "traefik.http.routers.grafana.tls.certresolver=letsencrypt"
+      - "traefik.http.services.grafana.loadbalancer.server.port=3000"
+    
+    depends_on:
+      prometheus:
+        condition: service_healthy
+    
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:3000/api/health || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+
+  # AlertManager (conditional)
+  additional_services:
+    alertmanager:
+      enabled_when: 'enable_alertmanager == true'
+      image: prom/alertmanager:latest
+      container_name: alertmanager
+      restart: unless-stopped
+      
+      ports:
+        - "${alertmanager_port}:9093"
+      
+      volumes:
+        - alertmanager_data:/alertmanager
+        - alertmanager_config:/etc/alertmanager
+      
+      networks:
+        - traefik
+      
+      command:
+        - '--config.file=/etc/alertmanager/alertmanager.yml'
+        - '--storage.path=/alertmanager'
+      
+      labels:
+        - "traefik.enable=true"
+        - "traefik.http.routers.alertmanager.rule=Host(`${alertmanager_subdomain}.${global:domain}`)"
+        - "traefik.http.routers.alertmanager.tls.certresolver=letsencrypt"
+        - "traefik.http.services.alertmanager.loadbalancer.server.port=9093"
+
+    node_exporter:
+      enabled_when: 'enable_node_exporter == true'
+      image: prom/node-exporter:latest
+      container_name: node-exporter
+      restart: unless-stopped
+      
+      ports:
+        - "9100:9100"
+      
+      volumes:
+        - /proc:/host/proc:ro
+        - /sys:/host/sys:ro
+        - /:/rootfs:ro
+      
+      networks:
+        - traefik
+      
+      command:
+        - '--path.procfs=/host/proc'
+        - '--path.rootfs=/rootfs'
+        - '--path.sysfs=/host/sys'
+        - '--collector.filesystem.mount-points-exclude=^/(sys|proc|dev|host|etc)($$|/)'
+
+    cadvisor:
+      enabled_when: 'enable_cadvisor == true'
+      image: gcr.io/cadvisor/cadvisor:latest
+      container_name: cadvisor
+      restart: unless-stopped
+      
+      ports:
+        - "8080:8080"
+      
+      volumes:
+        - /:/rootfs:ro
+        - /var/run:/var/run:ro
+        - /sys:/sys:ro
+        - /var/lib/docker/:/var/lib/docker:ro
+        - /dev/disk/:/dev/disk:ro
+      
+      networks:
+        - traefik
+      
+      privileged: true
+      devices:
+        - /dev/kmsg
+
+defaults:
+  dev:
+    prometheus_port: 9090
+    grafana_port: 3000
+    retention_days: 7
+    scrape_interval: 30s
+    enable_alertmanager: false
+    enable_node_exporter: true
+    enable_cadvisor: false
+    custom_dashboards: [docker, system]
+  prod:
+    prometheus_port: 9090
+    grafana_port: 3000
+    retention_days: 30
+    scrape_interval: 15s
+    enable_alertmanager: true
+    enable_node_exporter: true
+    enable_cadvisor: true
+    custom_dashboards: [docker, system, traefik, postgresql, redis]
