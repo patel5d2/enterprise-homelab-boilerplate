@@ -3,6 +3,12 @@
 
 .PHONY: help init build deploy status stop clean install dev test lint format docs
 
+# Virtual Environment
+VENV ?= venv
+PYTHON = $(VENV)/bin/python
+PIP = $(VENV)/bin/pip
+LABCTL = $(VENV)/bin/labctl
+
 # Default target
 help: ## Show this help message
 	@echo "Enterprise Home Lab Boilerplate"
@@ -14,67 +20,67 @@ help: ## Show this help message
 # Installation and Setup
 install: ## Install CLI dependencies
 	@echo "📦 Installing CLI dependencies..."
-	cd . && pip install -e .
+	$(PIP) install -e .
 	@echo "✅ Installation complete!"
 
 install-dev: ## Install development dependencies
 	@echo "📦 Installing development dependencies..."
-	cd . && pip install -e ".[dev]"
+	$(PIP) install -e ".[dev]"
 	@echo "✅ Development installation complete!"
 
 # Home Lab Management
 init: ## Initialize home lab configuration
 	@echo "🚀 Initializing home lab configuration..."
-	labctl init
+	$(LABCTL) init
 
 validate: ## Validate configuration
 	@echo "🔍 Validating configuration..."
-	labctl validate
+	$(LABCTL) validate
 
 build: ## Build Docker Compose files
 	@echo "🔨 Building Docker Compose configurations..."
-	labctl build
+	$(LABCTL) build
 
 deploy: ## Deploy home lab services
 	@echo "🚀 Deploying home lab services..."
-	labctl deploy --build --wait
+	$(LABCTL) deploy --build --wait
 
 status: ## Show service status
 	@echo "📊 Checking service status..."
-	labctl status
+	$(LABCTL) status
 
 logs: ## Show service logs
 	@echo "📋 Showing service logs..."
-	labctl logs --tail 50
+	$(LABCTL) logs --tail 50
 
 stop: ## Stop all services
 	@echo "🛑 Stopping services..."
-	labctl stop
+	$(LABCTL) stop
 
 clean: ## Clean up containers and volumes
 	@echo "🧹 Cleaning up..."
-	labctl stop --volumes --images
+	$(LABCTL) stop --volumes --images
 
 # Development
 dev: ## Set up development environment
 	@echo "🔧 Setting up development environment..."
-	python -m venv .venv
-	. .venv/bin/activate && pip install -e .[dev]
+	python3 -m venv $(VENV)
+	$(PIP) install -e .[dev]
 	@echo "✅ Development environment ready!"
 
 test: ## Run tests
 	@echo "🧪 Running tests..."
-	cd . && python -m pytest tests/ -v
+	$(PYTHON) -m pytest tests/ -v
 
 lint: ## Run linting
 	@echo "🔍 Running linting..."
-	cd . && python -m flake8 cli/labctl/
-	cd . && python -m mypy cli/labctl/
+	$(PYTHON) -m flake8 cli/labctl/
+	$(PYTHON) -m mypy cli/labctl/
 
 format: ## Format code
 	@echo "✨ Formatting code..."
-	cd . && python -m black cli/labctl/
-	cd . && python -m isort cli/labctl/
+	$(PYTHON) -m black cli/labctl/
+	$(PYTHON) -m isort cli/labctl/
 
 # Docker Management
 docker-build: ## Build custom Docker images
@@ -97,11 +103,11 @@ docker-clean: ## Clean Docker system
 # Backup and Restore
 backup: ## Run backup
 	@echo "💾 Running backup..."
-	labctl backup run
+	$(LABCTL) backup run
 
 restore: ## Restore from backup
 	@echo "🔄 Restoring from backup..."
-	labctl backup restore --snapshot latest
+	$(LABCTL) backup restore --snapshot latest
 
 # Documentation
 docs: ## Generate documentation
@@ -111,12 +117,12 @@ docs: ## Generate documentation
 # Monitoring
 monitor: ## Open monitoring dashboard
 	@echo "📊 Opening monitoring dashboard..."
-	@echo "Visit: https://grafana.$(shell labctl config --key core.domain || echo 'homelab.local')"
+	@echo "Visit: https://grafana.$(shell $(LABCTL) config --key core.domain || echo 'homelab.local')"
 
 # Security
 security-scan: ## Run security scan
 	@echo "🔒 Running security scan..."
-	labctl security scan
+	$(LABCTL) security scan
 
 # Quick Start
 quickstart: install init validate build deploy status ## Complete quickstart setup
@@ -138,7 +144,7 @@ check-prereqs: ## Check prerequisites
 
 version: ## Show version information
 	@echo "📋 Version information:"
-	labctl version
+	$(LABCTL) version
 
 # Default configuration values
 CONFIG_FILE ?= config.yaml

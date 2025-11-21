@@ -15,15 +15,15 @@ from rich.panel import Panel
 from ..core.config import Config
 from ..core.exceptions import HomeLabError
 from .commands import (
-    init_cmd,
-    validate_cmd,
     build_cmd,
-    deploy_cmd,
-    status_cmd,
-    logs_cmd,
-    stop_cmd,
     config_cmd,
+    deploy_cmd,
+    init_cmd,
+    logs_cmd,
     migrate_cmd,
+    status_cmd,
+    stop_cmd,
+    validate_cmd,
 )
 
 # Initialize Typer app
@@ -50,7 +50,7 @@ config_file_option = typer.Option(
 verbose_option = typer.Option(
     False,
     "--verbose",
-    "-v", 
+    "-v",
     help="Enable verbose output",
 )
 
@@ -64,7 +64,8 @@ debug_option = typer.Option(
 def version_callback(value: bool) -> None:
     """Show version information"""
     if value:
-        from .. import __version__, __description__
+        from .. import __description__, __version__
+
         rprint(f"[bold blue]labctl[/bold blue] v{__version__}")
         rprint(f"[dim]{__description__}[/dim]")
         raise typer.Exit()
@@ -84,7 +85,7 @@ def main(
 ) -> None:
     """
     🏠 Enterprise Home Lab Infrastructure Management CLI
-    
+
     A comprehensive tool for managing your self-hosted infrastructure with
     Docker Compose, featuring GitLab, monitoring, security, and more.
     """
@@ -120,7 +121,7 @@ def init_command(
 ) -> None:
     """
     🚀 Initialize new home lab configuration
-    
+
     Creates a new configuration file with guided setup wizard.
     Uses the new service-specific configuration system with dependency management.
     """
@@ -156,7 +157,7 @@ def validate_command(
 ) -> None:
     """
     ✅ Validate configuration and requirements
-    
+
     Checks configuration syntax, schema compliance, service dependencies, and optionally
     runs preflight system checks to ensure Docker and networking requirements are met.
     """
@@ -164,9 +165,11 @@ def validate_command(
         validate_cmd.run(config_file=config_file, strict=strict, preflight=preflight)
     except HomeLabError as e:
         console.print(f"[red]Validation failed:[/red] {e.message}")
-        if hasattr(e, 'errors') and e.errors:
+        if hasattr(e, "errors") and e.errors:
             for error in e.errors:
-                console.print(f"  • [red]{error.get('path', 'unknown')}[/red]: {error.get('message', '')}")
+                console.print(
+                    f"  • [red]{error.get('path', 'unknown')}[/red]: {error.get('message', '')}"
+                )
         raise typer.Exit(1)
 
 
@@ -192,11 +195,11 @@ def build_command(
 ) -> None:
     """
     🔨 Build Docker Compose configurations
-    
+
     Generate Docker Compose files from configuration.
     """
     try:
-        service_list = services.split(',') if services else None
+        service_list = services.split(",") if services else None
         build_cmd.run(
             config_file=config_file,
             services=service_list,
@@ -208,7 +211,7 @@ def build_command(
         raise typer.Exit(1)
 
 
-@app.command("deploy") 
+@app.command("deploy")
 def deploy_command(
     config_file: str = config_file_option,
     services: Optional[str] = typer.Option(
@@ -239,11 +242,11 @@ def deploy_command(
 ) -> None:
     """
     🚀 Deploy home lab services
-    
+
     Deploy services using Docker Compose with health checking.
     """
     try:
-        service_list = services.split(',') if services else None
+        service_list = services.split(",") if services else None
         deploy_cmd.run(
             config_file=config_file,
             services=service_list,
@@ -279,11 +282,11 @@ def status_command(
 ) -> None:
     """
     📊 Show service status and health
-    
+
     Displays current status of all services or specific services.
     """
     try:
-        service_list = services.split(',') if services else None
+        service_list = services.split(",") if services else None
         status_cmd.run(
             config_file=config_file,
             services=service_list,
@@ -322,11 +325,11 @@ def logs_command(
 ) -> None:
     """
     📋 Show service logs
-    
+
     Display logs from services with filtering and follow options.
     """
     try:
-        service_list = services.split(',') if services else None
+        service_list = services.split(",") if services else None
         logs_cmd.run(
             config_file=config_file,
             services=service_list,
@@ -365,11 +368,11 @@ def stop_command(
 ) -> None:
     """
     🛑 Stop services and cleanup resources
-    
+
     Stop running services and optionally cleanup volumes and images.
     """
     try:
-        service_list = services.split(',') if services else None
+        service_list = services.split(",") if services else None
         stop_cmd.run(
             config_file=config_file,
             services=service_list,
@@ -408,7 +411,7 @@ def config_command(
 ) -> None:
     """
     ⚙️ Manage configuration files
-    
+
     View, edit, and manage configuration files.
     """
     try:
@@ -428,31 +431,20 @@ def config_command(
 def migrate_command(
     input_file: str = typer.Argument(..., help="Input configuration file to migrate"),
     output_file: Optional[str] = typer.Option(
-        None,
-        "--output",
-        "-o",
-        help="Output file for migrated configuration"
+        None, "--output", "-o", help="Output file for migrated configuration"
     ),
     backup: bool = typer.Option(
-        True,
-        "--backup/--no-backup",
-        help="Create backup of original file"
+        True, "--backup/--no-backup", help="Create backup of original file"
     ),
     preview: bool = typer.Option(
-        True,
-        "--preview/--no-preview",
-        help="Show migration preview before applying"
+        True, "--preview/--no-preview", help="Show migration preview before applying"
     ),
-    force: bool = typer.Option(
-        False,
-        "--force",
-        help="Skip confirmation prompts"
-    ),
+    force: bool = typer.Option(False, "--force", help="Skip confirmation prompts"),
 ) -> None:
     """
     📋 Migrate legacy configuration to v2 format
-    
-    Convert existing configuration files to the new v2 format with 
+
+    Convert existing configuration files to the new v2 format with
     service-specific settings and enhanced structure.
     """
     try:
@@ -461,7 +453,7 @@ def migrate_command(
             output_file=output_file,
             backup=backup,
             preview=preview,
-            force=force
+            force=force,
         )
     except HomeLabError as e:
         console.print(f"[red]Migration failed:[/red] {e.message}")
@@ -472,11 +464,11 @@ def migrate_command(
 def version_command() -> None:
     """
     📋 Show detailed version information
-    
+
     Displays version, build info, and system details.
     """
-    from .. import __version__, __description__
-    
+    from .. import __description__, __version__
+
     panel = Panel(
         f"[bold blue]labctl[/bold blue] v{__version__}\n"
         f"[dim]{__description__}[/dim]\n\n"
@@ -485,7 +477,7 @@ def version_command() -> None:
         title="Version Information",
         border_style="blue",
     )
-    
+
     console.print(panel)
 
 
@@ -494,19 +486,20 @@ def handle_exception(exc_type, exc_value, exc_traceback):
     if issubclass(exc_type, KeyboardInterrupt):
         console.print("\n[yellow]Operation cancelled by user[/yellow]")
         return
-    
+
     if isinstance(exc_value, HomeLabError):
         console.print(f"[red]Error [{exc_value.code}]:[/red] {exc_value.message}")
-        
+
         if exc_value.details:
             console.print("[dim]Details:[/dim]")
             for key, value in exc_value.details.items():
                 console.print(f"  {key}: {value}")
         return
-    
+
     # For unexpected exceptions, show more detail in debug mode
     if os.getenv("LABCTL_DEBUG"):
         import traceback
+
         console.print("[red]Unexpected error occurred:[/red]")
         console.print(traceback.format_exception(exc_type, exc_value, exc_traceback))
     else:
