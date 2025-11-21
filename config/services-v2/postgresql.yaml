@@ -208,9 +208,11 @@ defaults:
     shared_buffers: 128MB
     work_mem: 2MB
     backup_retention_days: 7
+    enabled: true
   prod:
     port: 5432
     max_connections: 200
     shared_buffers: 512MB
     work_mem: 8MB
     backup_retention_days: 30
+    enabled: true

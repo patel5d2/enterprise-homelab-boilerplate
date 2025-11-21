@@ -10,7 +10,7 @@ import yaml
 from enum import Enum
 from pathlib import Path
 from typing import Dict, List, Optional, Any, Union
-from pydantic import BaseModel, Field, validator, ValidationError
+from pydantic import BaseModel, Field, field_validator, ValidationError, ConfigDict
 from functools import lru_cache
 from rich.console import Console
 
@@ -47,14 +47,14 @@ class ComposeEnvSource(BaseModel):
     value_map: Optional[Dict[str, str]] = Field(None, description="Value mapping")
     value_if: Optional[Dict[str, Any]] = Field(None, description="Conditional value")
 
-    @validator('key')
+    @field_validator('key')
+    @classmethod
     def validate_env_key(cls, v):
         if not re.match(r'^[A-Z][A-Z0-9_]*$', v):
             raise ValueError('Environment variable must be uppercase alphanumeric with underscores')
         return v
 
-    class Config:
-        extra = "forbid"
+    model_config = ConfigDict(extra="forbid")
 
 
 class ComposeHealthcheck(BaseModel):
@@ -65,23 +65,22 @@ class ComposeHealthcheck(BaseModel):
     retries: int = Field(default=3, description="Number of retries")
     start_period: Optional[str] = Field(None, description="Start period")
 
-    class Config:
-        extra = "forbid"
+    model_config = ConfigDict(extra="forbid")
 
 
 class ComposeDependsOn(BaseModel):
     """Docker depends_on configuration"""
     condition: str = Field(default="service_started", description="Dependency condition")
 
-    @validator('condition')
+    @field_validator('condition')
+    @classmethod
     def validate_condition(cls, v):
         valid_conditions = ["service_started", "service_healthy", "service_completed_successfully"]
         if v not in valid_conditions:
             raise ValueError(f'Condition must be one of: {", ".join(valid_conditions)}')
         return v
 
-    class Config:
-        extra = "forbid"
+    model_config = ConfigDict(extra="forbid")
 
 
 class ComposeAdditionalService(BaseModel):
@@ -102,8 +101,7 @@ class ComposeAdditionalService(BaseModel):
     cap_add: Optional[List[str]] = Field(None, description="Linux capabilities to add")
     devices: Optional[List[str]] = Field(None, description="Device mappings")
 
-    class Config:
-        extra = "forbid"
+    model_config = ConfigDict(extra="forbid")
 
 
 class ComposeSection(BaseModel):
@@ -127,8 +125,7 @@ class ComposeSection(BaseModel):
     additional_services: Optional[Dict[str, ComposeAdditionalService]] = Field(None, description="Additional services")
     template_vars: Optional[Dict[str, Dict[str, str]]] = Field(None, description="Template variables")
 
-    class Config:
-        extra = "forbid"
+    model_config = ConfigDict(extra="forbid")
 
 
 class FieldSchema(BaseModel):
@@ -155,13 +152,15 @@ class FieldSchema(BaseModel):
     hidden_if: Optional[str] = Field(None, description="Conditional hiding expression")
     depends_on: Optional[List[str]] = Field(None, description="Field dependencies")
 
-    @validator('key')
+    @field_validator('key')
+    @classmethod
     def validate_key(cls, v):
         if not re.match(r'^[a-zA-Z][a-zA-Z0-9_]*$', v):
             raise ValueError('Field key must be alphanumeric with underscores, starting with letter')
         return v
 
-    @validator('validate_regex')
+    @field_validator('validate_regex')
+    @classmethod
     def validate_regex_pattern(cls, v):
         if v:
             try:
@@ -170,29 +169,34 @@ class FieldSchema(BaseModel):
                 raise ValueError(f'Invalid regex pattern: {e}')
         return v
 
-    @validator('choices', pre=True)
-    def validate_choices(cls, v, values):
+    @field_validator('choices', mode='before')
+    @classmethod
+    def validate_choices(cls, v, info):
+        values = info.data
         field_type = values.get('type')
         if field_type in [FieldType.CHOICE, FieldType.MULTISELECT] and not v:
             raise ValueError(f'Field type {field_type} requires choices')
         return v
 
-    @validator('min', 'max')
-    def validate_int_bounds(cls, v, values):
+    @field_validator('min', 'max')
+    @classmethod
+    def validate_int_bounds(cls, v, info):
+        values = info.data
         field_type = values.get('type')
         if v is not None and field_type != FieldType.INTEGER:
             raise ValueError('min/max only valid for integer fields')
         return v
 
-    @validator('min_selections', 'max_selections')
-    def validate_multiselect_bounds(cls, v, values):
+    @field_validator('min_selections', 'max_selections')
+    @classmethod
+    def validate_multiselect_bounds(cls, v, info):
+        values = info.data
         field_type = values.get('type')
         if v is not None and field_type != FieldType.MULTISELECT:
             raise ValueError('min_selections/max_selections only valid for multiselect fields')
         return v
 
-    class Config:
-        extra = "forbid"
+    model_config = ConfigDict(extra="forbid")
 
 
 class ServiceDefaults(BaseModel):
@@ -200,8 +204,7 @@ class ServiceDefaults(BaseModel):
     dev: Optional[Dict[str, Any]] = Field(None, description="Development profile defaults")
     prod: Optional[Dict[str, Any]] = Field(None, description="Production profile defaults")
 
-    class Config:
-        extra = "forbid"
+    model_config = ConfigDict(extra="forbid")
 
 
 class ServiceSchema(BaseModel):
@@ -217,20 +220,23 @@ class ServiceSchema(BaseModel):
     compose: ComposeSection = Field(..., description="Docker compose configuration")
     defaults: Optional[ServiceDefaults] = Field(None, description="Profile-specific defaults")
 
-    @validator('id')
+    @field_validator('id')
+    @classmethod
     def validate_id(cls, v):
         if not re.match(r'^[a-z][a-z0-9_]*$', v):
             raise ValueError('Service ID must be lowercase alphanumeric with underscores')
         return v
 
-    @validator('fields')
+    @field_validator('fields')
+    @classmethod
     def validate_fields_unique(cls, v):
         keys = [field.key for field in v]
         if len(keys) != len(set(keys)):
             raise ValueError('Field keys must be unique within service')
         return v
 
-    @validator('fields')
+    @field_validator('fields')
+    @classmethod
     def validate_enabled_field(cls, v):
         # Ensure there's always an 'enabled' field
         has_enabled = any(field.key == 'enabled' for field in v)
@@ -238,8 +244,7 @@ class ServiceSchema(BaseModel):
             raise ValueError('Service must have an "enabled" field')
         return v
 
-    class Config:
-        extra = "forbid"
+    model_config = ConfigDict(extra="forbid")
 
 
 class SchemaValidationError(Exception):

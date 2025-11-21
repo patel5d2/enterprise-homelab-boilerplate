@@ -262,6 +262,7 @@ defaults:
     show_password_hint: true
     enable_websocket: false
     log_level: debug
+    enabled: false
   prod:
     http_port: 8080
     signups_allowed: false
@@ -269,3 +270,4 @@ defaults:
     show_password_hint: false
     enable_websocket: true
     log_level: info
+    enabled: false

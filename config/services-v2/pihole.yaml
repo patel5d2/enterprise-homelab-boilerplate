@@ -229,8 +229,10 @@ defaults:
     privacy_level: anonymous
     enable_dhcp: false
     default_blocklists: [stevenblack]
+    enabled: false
   prod:
     log_queries: true
     privacy_level: hide_domains
     enable_dhcp: false
     default_blocklists: [stevenblack, malware_domain_list, disconnect]
+    enabled: false

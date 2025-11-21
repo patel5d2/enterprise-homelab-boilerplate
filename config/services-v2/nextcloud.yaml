@@ -295,6 +295,7 @@ defaults:
     enable_preview_generator: false
     enable_office_integration: false
     enable_talk: false
+    enabled: false
   prod:
     http_port: 8081
     max_upload_size: 2G
@@ -302,3 +303,4 @@ defaults:
     enable_preview_generator: true
     enable_office_integration: true
     enable_talk: false
+    enabled: true

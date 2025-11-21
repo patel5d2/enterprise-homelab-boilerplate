@@ -196,7 +196,9 @@ defaults:
     acme_environment: staging
     dashboard_subdomain: traefik-dev
     enable_hsts: false
+    enabled: true
   prod:
     acme_environment: production
     dashboard_subdomain: traefik
     enable_hsts: true
+    enabled: true

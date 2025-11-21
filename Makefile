@@ -14,12 +14,12 @@ help: ## Show this help message
 # Installation and Setup
 install: ## Install CLI dependencies
 	@echo "📦 Installing CLI dependencies..."
-	cd cli && pip install -e .
+	cd . && pip install -e .
 	@echo "✅ Installation complete!"
 
 install-dev: ## Install development dependencies
 	@echo "📦 Installing development dependencies..."
-	cd cli && pip install -e ".[dev]"
+	cd . && pip install -e ".[dev]"
 	@echo "✅ Development installation complete!"
 
 # Home Lab Management
@@ -59,22 +59,22 @@ clean: ## Clean up containers and volumes
 dev: ## Set up development environment
 	@echo "🔧 Setting up development environment..."
 	python -m venv .venv
-	. .venv/bin/activate && pip install -e cli/[dev]
+	. .venv/bin/activate && pip install -e .[dev]
 	@echo "✅ Development environment ready!"
 
 test: ## Run tests
 	@echo "🧪 Running tests..."
-	cd cli && python -m pytest tests/ -v
+	cd . && python -m pytest tests/ -v
 
 lint: ## Run linting
 	@echo "🔍 Running linting..."
-	cd cli && python -m flake8 labctl/
-	cd cli && python -m mypy labctl/
+	cd . && python -m flake8 cli/labctl/
+	cd . && python -m mypy cli/labctl/
 
 format: ## Format code
 	@echo "✨ Formatting code..."
-	cd cli && python -m black labctl/
-	cd cli && python -m isort labctl/
+	cd . && python -m black cli/labctl/
+	cd . && python -m isort cli/labctl/
 
 # Docker Management
 docker-build: ## Build custom Docker images

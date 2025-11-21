@@ -203,6 +203,7 @@ defaults:
     enable_node_exporter: true
     enable_cadvisor: false
     custom_dashboards: [docker, system]
+    enabled: true
   prod:
     prometheus_port: 9090
     grafana_port: 3000
@@ -212,3 +213,4 @@ defaults:
     enable_node_exporter: true
     enable_cadvisor: true
     custom_dashboards: [docker, system, traefik, postgresql, redis]
+    enabled: true
