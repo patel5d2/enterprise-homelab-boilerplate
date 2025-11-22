@@ -36,11 +36,35 @@ def run(
 
     # Check if config already exists
     if config_path.exists() and not force:
-        if not Confirm.ask(
-            f"Configuration file {config_file} already exists. Overwrite?"
-        ):
-            console.print("[yellow]Initialization cancelled[/yellow]")
+        console.print(f"[green]✓ Configuration file found at {config_file}[/green]")
+        
+        if not interactive or non_interactive:
+            console.print("[dim]Skipping initialization (use --force to overwrite)[/dim]")
             return
+
+        action = Prompt.ask(
+            "Configuration already exists. What would you like to do?",
+            choices=["skip", "reconfigure", "overwrite"],
+            default="skip"
+        )
+
+        if action == "skip":
+            console.print("[dim]Skipping initialization[/dim]")
+            # Still show next steps for helpfulness
+            try:
+                with open(config_path, "r") as f:
+                    existing_config = yaml.safe_load(f)
+                _show_next_steps_v2(existing_config)
+            except Exception:
+                pass
+            return
+        elif action == "reconfigure":
+            console.print("[blue]Starting reconfiguration...[/blue]")
+            # Continue to wizard
+        else: # overwrite
+            if not Confirm.ask("Are you sure you want to overwrite your existing configuration?"):
+                console.print("[yellow]Initialization cancelled[/yellow]")
+                return
 
     # Check for legacy config and offer migration
     if config_path.exists() and not non_interactive:

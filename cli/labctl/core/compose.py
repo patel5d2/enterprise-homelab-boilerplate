@@ -27,7 +27,7 @@ class ComposeGenerator:
         self.config = config
         self.schemas = schemas or {}
         self.services = {}
-        self.networks = {"traefik": {"driver": "bridge", "name": "traefik"}}
+        self.networks = {"traefik": {"external": True, "name": "traefik"}}
         self.volumes = {}
         self.env_vars = {}
 
@@ -35,7 +35,11 @@ class ComposeGenerator:
         if not self.schemas and hasattr(config, "services"):
             try:
                 # Try to load schemas from default location
-                schemas_path = Path("config/services")
+                # Prefer v2 services directory if it exists
+                schemas_path = Path("config/services-v2")
+                if not schemas_path.exists():
+                    schemas_path = Path("config/services")
+
                 if schemas_path.exists():
                     self.schemas = load_service_schemas(str(schemas_path))
             except Exception as e:
@@ -227,9 +231,13 @@ class ComposeGenerator:
 
         try:
             # Add health check
-            if schema.compose.healthcheck and service_config.get(
-                "healthcheck_enabled", True
-            ):
+            healthcheck_enabled = True
+            if isinstance(service_config, dict):
+                healthcheck_enabled = service_config.get("healthcheck_enabled", True)
+            else:
+                healthcheck_enabled = getattr(service_config, "healthcheck_enabled", True)
+
+            if schema.compose.healthcheck and healthcheck_enabled:
                 healthcheck = self._build_healthcheck_from_schema(schema)
                 if healthcheck:
                     compose_service["healthcheck"] = healthcheck
@@ -241,7 +249,16 @@ class ComposeGenerator:
         # Add any additional compose properties
         try:
             if hasattr(schema.compose, "command") and schema.compose.command:
-                compose_service["command"] = schema.compose.command
+                command = schema.compose.command
+                if isinstance(command, str):
+                    compose_service["command"] = self._substitute_template(
+                        command, service_id, service_config
+                    )
+                elif isinstance(command, list):
+                    compose_service["command"] = [
+                        self._substitute_template(cmd, service_id, service_config)
+                        for cmd in command
+                    ]
 
             if hasattr(schema.compose, "cap_add") and schema.compose.cap_add:
                 compose_service["cap_add"] = schema.compose.cap_add
@@ -415,14 +432,10 @@ class ComposeGenerator:
         domain = self._get_domain()
 
         for label_spec in schema.compose.labels:
-            # Handle template substitution
-            label = label_spec
-            if "${DOMAIN}" in label:
-                label = label.replace("${DOMAIN}", domain)
-            if "${SERVICE_ID}" in label:
-                label = label.replace("${SERVICE_ID}", service_id)
-
-            # Handle service config field substitution
+            # Handle template substitution using the centralized method
+            label = self._substitute_template(label_spec, service_id, service_config)
+            
+            # Handle legacy manual substitutions (if any remain not covered by _substitute_template)
             if hasattr(service_config, "domain") and service_config.domain:
                 if "${SERVICE_DOMAIN}" in label:
                     label = label.replace("${SERVICE_DOMAIN}", service_config.domain)
@@ -495,6 +508,51 @@ class ComposeGenerator:
                 result = result.replace(
                     f"${{ENV:{env_var}}}", str(self.config["env_vars"][env_var])
                 )
+
+        # Handle generate:htpasswd
+        if "${generate:htpasswd" in result:
+            import re
+            # Pattern: ${generate:htpasswd:user_field:pass_field}
+            pattern = r"\$\{generate:htpasswd:(\w+):(\w+)\}"
+            matches = re.findall(pattern, result)
+            for user_field, pass_field in matches:
+                # Try to find values in config
+                user_val = "admin"
+                if isinstance(service_config, dict):
+                    user_val = service_config.get(user_field, "admin")
+                elif hasattr(service_config, user_field):
+                    user_val = getattr(service_config, user_field)
+                elif user_field == "dashboard_user" and hasattr(service_config, "dashboard_username"):
+                    user_val = getattr(service_config, "dashboard_username")
+
+                # For password/hash, check if we have a pre-calculated hash
+                hash_val = None
+                if hasattr(service_config, "dashboard_auth_hash") and service_config.dashboard_auth_hash:
+                    hash_val = service_config.dashboard_auth_hash
+                
+                # If no hash, we should ideally generate it, but for now let's use a placeholder or environment variable
+                # The .env template uses TRAEFIK_DASHBOARD_USERS
+                if not hash_val:
+                    replacement = "${TRAEFIK_DASHBOARD_USERS}"
+                else:
+                    replacement = f"{user_val}:{hash_val}"
+                
+                result = result.replace(f"${{generate:htpasswd:{user_field}:{pass_field}}}", replacement)
+
+        # Handle from_field:field_name
+        if "${from_field:" in result:
+            import re
+            pattern = r"\$\{from_field:(\w+)\}"
+            matches = re.findall(pattern, result)
+            for field_name in matches:
+                value = None
+                if isinstance(service_config, dict):
+                    value = service_config.get(field_name)
+                elif hasattr(service_config, field_name):
+                    value = getattr(service_config, field_name)
+                
+                if value is not None:
+                    result = result.replace(f"${{from_field:{field_name}}}", str(value))
 
         return result
 
@@ -632,7 +690,7 @@ class ComposeGenerator:
             "TZ=UTC",
             "",
             "# Traefik Dashboard Authentication (generate with: htpasswd -nb admin password)",
-            "TRAEFIK_DASHBOARD_USERS=admin:$2y$10$example_hash_here",
+            "TRAEFIK_DASHBOARD_USERS=admin:$$2y$$10$$example_hash_here",
             "",
             "# Vaultwarden Admin Token (generate with: openssl rand -hex 32)",
             "VAULTWARDEN_ADMIN_TOKEN=your_secure_token_here",

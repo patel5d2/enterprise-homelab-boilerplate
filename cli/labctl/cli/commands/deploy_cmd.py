@@ -35,7 +35,18 @@ def run(
         raise HomeLabError(f"Configuration file not found: {config_file}")
 
     # Load configuration
-    config = Config.load_from_file(config_path)
+    # Load configuration
+    import yaml
+    from ...core.config import LabConfig
+    
+    # Check version
+    with open(config_path, "r") as f:
+        config_data = yaml.safe_load(f)
+    
+    if config_data.get("version") == 2:
+        config = LabConfig.load_from_file(config_path)
+    else:
+        config = Config.load_from_file(config_path)
 
     # Set compose directory
     if compose_dir:
@@ -66,11 +77,37 @@ def run(
 
             # Check for environment file
             env_file = compose_path / ".env"
-            env_template = compose_path / ".env.template"
-            if not env_file.exists() and env_template.exists():
-                console.print(
-                    "[yellow]⚠️  .env file not found. Copy .env.template to .env and configure it.[/yellow]"
-                )
+            if not env_file.exists():
+                console.print("[yellow]⚠️  .env file not found. Attempting to generate...[/yellow]")
+                
+                # Try to generate from config
+                env_vars = {}
+                if isinstance(config, LabConfig) and hasattr(config, "env_vars"):
+                     # LabConfig doesn't have env_vars field in definition but init creates it in dict
+                     # We might need to access the raw dict or add it to LabConfig
+                     pass 
+                
+                # Fallback: Try to load from config file directly if model doesn't have it
+                try:
+                    import yaml
+                    with open(config_file, "r") as f:
+                        raw_config = yaml.safe_load(f)
+                    env_vars = raw_config.get("env_vars", {})
+                except Exception:
+                    env_vars = {}
+
+                if env_vars:
+                    from ...core.secrets import load_or_create_env
+                    load_or_create_env(str(env_file), env_vars)
+                    console.print("[green]✓ Generated .env file from configuration[/green]")
+                else:
+                    # Fallback to template copy
+                    env_template = compose_path / ".env.template"
+                    if env_template.exists():
+                        import shutil
+                        shutil.copy(env_template, env_file)
+                        console.print("[yellow]✓ Copied .env.template to .env (please configure secrets)[/yellow]")
+                
                 progress.update(deploy_task, advance=5)
 
             # Deploy all services
@@ -134,7 +171,8 @@ def _deploy_compose_stack(
 ) -> None:
     """Deploy a specific compose stack"""
 
-    compose_file_path = compose_path / compose_file
+    # Use absolute path for compose file to avoid cwd issues
+    compose_file_path = (compose_path / compose_file).resolve()
     if not compose_file_path.exists():
         return
 
@@ -183,17 +221,32 @@ def _wait_for_services(config: Config, timeout: int) -> None:
 
             # Check if key services are running
             required_services = ["traefik"]
-            if config.gitlab.enabled or config.ci_cd.gitlab:
-                required_services.append("gitlab")
-            if config.monitoring.enabled:
-                required_services.extend(["prometheus", "grafana"])
-            if config.databases.postgresql:
-                required_services.append("postgres")
-            if config.passwords.vaultwarden:
-                required_services.append("vaultwarden")
+            
+            if isinstance(config, LabConfig):
+                # V2 Config
+                enabled_services = config.get_enabled_services()
+                if "gitlab" in enabled_services:
+                    required_services.append("gitlab")
+                if "monitoring" in enabled_services:
+                    required_services.extend(["prometheus", "grafana"])
+                if "postgresql" in enabled_services:
+                    required_services.append("postgres") # Container name is usually postgres or postgresql
+                if "vaultwarden" in enabled_services:
+                    required_services.append("vaultwarden")
+            else:
+                # Legacy Config
+                if config.gitlab.enabled or config.ci_cd.gitlab:
+                    required_services.append("gitlab")
+                if config.monitoring.enabled:
+                    required_services.extend(["prometheus", "grafana"])
+                if config.databases.postgresql:
+                    required_services.append("postgres")
+                if config.passwords.vaultwarden:
+                    required_services.append("vaultwarden")
 
             all_running = True
             for service in required_services:
+                # Check partial match because container names might have prefixes/suffixes
                 if not any(service in container for container in running_containers):
                     all_running = False
                     break

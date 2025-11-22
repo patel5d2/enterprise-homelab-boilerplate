@@ -18,10 +18,15 @@ help: ## Show this help message
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | sort | awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[36m%-15s\033[0m %s\n", $$1, $$2}'
 
 # Installation and Setup
+# Installation and Setup
 install: ## Install CLI dependencies
 	@echo "📦 Installing CLI dependencies..."
+	@if [ ! -d "$(VENV)" ]; then python3 -m venv $(VENV); fi
 	$(PIP) install -e .
 	@echo "✅ Installation complete!"
+
+guide: ## Show the Starter Guide
+	@cat StarterGuide.md
 
 install-dev: ## Install development dependencies
 	@echo "📦 Installing development dependencies..."

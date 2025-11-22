@@ -188,6 +188,8 @@ class TraefikConfig(BaseServiceConfig):
         default=True, description="Enable Traefik dashboard"
     )
     dashboard_username: str = Field(default="admin", description="Dashboard username")
+    dashboard_password: Optional[str] = Field(default=None, description="Dashboard password")
+    dashboard_subdomain: str = Field(default="traefik", description="Dashboard subdomain")
     dashboard_auth_hash: Optional[str] = Field(
         default=None, description="Dashboard auth hash"
     )

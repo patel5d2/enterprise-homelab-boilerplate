@@ -239,6 +239,12 @@ def deploy_command(
         "--timeout",
         help="Timeout for waiting (seconds)",
     ),
+    detach: bool = typer.Option(
+        True,
+        "--detach/--no-detach",
+        "-d/-D",
+        help="Run containers in background",
+    ),
 ) -> None:
     """
     🚀 Deploy home lab services
@@ -254,6 +260,7 @@ def deploy_command(
             build=build,
             wait=wait,
             timeout=timeout,
+            detach=detach,
         )
     except HomeLabError as e:
         console.print(f"[red]Deployment failed:[/red] {e.message}")
