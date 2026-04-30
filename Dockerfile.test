@@ -1,3 +1,4 @@
+# syntax=docker/dockerfile:1.4
 # Bootstrap smoke test
 # Based on ubuntu:24.04 — mirrors a typical fresh-machine Linux install.
 # Usage: docker build -f Dockerfile.test -t homelab-test . && docker run --rm homelab-test
@@ -34,7 +35,7 @@ RUN python3 -m venv venv && \
     venv/bin/pip install --quiet -e ".[dev]"
 
 # Generate a minimal .env so doctor can pass the .env check
-RUN cat << 'EOF' > /tmp/gen_env.py
+COPY <<EOF /tmp/gen_env.py
 import secrets, pathlib
 env_file = pathlib.Path('.env')
 template = pathlib.Path('.env.template')
