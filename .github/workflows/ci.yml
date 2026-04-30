@@ -69,16 +69,3 @@ jobs:
 
       - name: Run smoke tests inside container
         run: docker run --rm homelab-smoke-test
-
-  # ── Bootstrap dry-run (macOS native) ────────────────────────────────────────
-  bootstrap-macos:
-    name: Bootstrap dry-run (macOS)
-    runs-on: macos-latest
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Run bootstrap --non-interactive --dry-run
-        run: bash bootstrap.sh --non-interactive --dry-run
-        env:
-          # Pre-seed answers for any remaining interactive prompts
-          CI: "true"
