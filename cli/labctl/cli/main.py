@@ -18,6 +18,7 @@ from .commands import (
     build_cmd,
     config_cmd,
     deploy_cmd,
+    doctor_cmd,
     init_cmd,
     logs_cmd,
     migrate_cmd,
@@ -464,6 +465,27 @@ def migrate_command(
         )
     except HomeLabError as e:
         console.print(f"[red]Migration failed:[/red] {e.message}")
+        raise typer.Exit(1)
+
+
+@app.command("doctor")
+def doctor_command(
+    project_root: Optional[str] = typer.Option(
+        None,
+        "--root",
+        help="Project root directory (defaults to current working directory)",
+    ),
+) -> None:
+    """
+    🩺 Run post-install health checks
+
+    Verifies Python version, Docker, .env, config.yaml, and required env vars.
+    Prints pass/fail per check with remediation hints.
+    Exit code 0 = healthy, 1 = issues found.
+    """
+    try:
+        doctor_cmd.run(project_root=project_root)
+    except SystemExit:
         raise typer.Exit(1)
 
 

@@ -1,20 +1,29 @@
 """
-Wizard Orchestrator
+Enhanced init wizard orchestrator (Phase 2).
 
-This module coordinates the entire interactive configuration flow,
-from service selection to final configuration summary.
+New flow:
+  1. Profile selection
+  2. Core settings (domain + email)
+  3. Category-by-category enable/disable — "Enable [Postgres / Redis / MongoDB]? (y/N)"
+  4. For each enabled service: field-level prompts with defaults shown, secrets auto-generated
+  5. Dual-write: non-secret config → config.yaml,  secrets → .env
+  6. Summary: "Enabled: traefik, postgres, grafana. Disabled: 13 others."
+
+Re-running is safe — existing values shown as defaults.
 """
 
+from __future__ import annotations
+
+import secrets as _secrets
+import string
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Set
 
-from rich.columns import Columns
 from rich.console import Console
 from rich.panel import Panel
 from rich.prompt import Confirm, Prompt
 from rich.table import Table
 from rich.text import Text
-from rich.tree import Tree
 
 from ...core.services import (
     DependencyGraph,
@@ -23,587 +32,431 @@ from ...core.services import (
     load_service_schemas,
     resolve_with_dependencies,
 )
-from .prompter import ask_custom_environment_variables, ask_field, display_field_summary
+from .prompter import ask_field, display_field_summary, generate_password
 
 console = Console()
 
+# ── Helpers ───────────────────────────────────────────────────────────────────
+
+_SECRET_KEYWORDS = ("password", "token", "secret", "key", "pass", "api_key")
+
+
+def _is_secret_field(key: str) -> bool:
+    k = key.lower()
+    return any(w in k for w in _SECRET_KEYWORDS)
+
+
+def _env_var_name(service_id: str, field_key: str) -> str:
+    """Convert service_id + field_key → UPPER_SNAKE_CASE env var name."""
+    return f"{service_id.upper()}_{field_key.upper()}"
+
+
+# ── Session ───────────────────────────────────────────────────────────────────
+
 
 class WizardSession:
-    """
-    Manages the configuration session state and context
-    """
+    """Holds all state accumulated during the wizard run."""
 
     def __init__(self, profile: str = "prod"):
         self.profile = profile
         self.schemas: Dict[str, ServiceSchema] = {}
         self.selected_services: Set[str] = set()
         self.resolved_services: List[str] = []
+        # field values (non-secret + secret, for internal use)
         self.service_configs: Dict[str, Dict[str, Any]] = {}
+        # {ENV_VAR: value}  — secret fields extracted for .env
+        self.env_vars: Dict[str, str] = {}
+        # {service_id: {KEY: val}}  — custom env vars added by the user
         self.custom_env: Dict[str, Dict[str, str]] = {}
         self.global_context: Dict[str, Any] = {}
 
-    def load_schemas(self, schemas_dir: Path) -> None:
-        """Load service schemas"""
-        self.schemas = load_service_schemas(schemas_dir)
-        console.print(f"[green]Loaded {len(self.schemas)} service schemas[/green]")
-
-    def set_global_context(self, context: Dict[str, Any]) -> None:
-        """Set global context values (like domain)"""
-        self.global_context.update(context)
+    # ── Profile helpers ───────────────────────────────────────────────────
 
     def get_profile_defaults(self, service_id: str) -> Dict[str, Any]:
-        """Get profile-specific defaults for a service"""
         schema = self.schemas.get(service_id)
         if not schema or not schema.defaults:
             return {}
-
         if self.profile == "dev" and schema.defaults.dev:
             return schema.defaults.dev
-        elif self.profile == "prod" and schema.defaults.prod:
+        if self.profile == "prod" and schema.defaults.prod:
             return schema.defaults.prod
-
         return {}
 
-    def is_service_enabled(self, service_id: str) -> bool:
-        """Check if a service is enabled"""
-        return self.service_configs.get(service_id, {}).get("enabled", False)
+
+# ── Step helpers ──────────────────────────────────────────────────────────────
 
 
-def display_welcome() -> None:
-    """Display welcome message"""
-    welcome_text = """
-🏠 [bold blue]Enterprise Home Lab Configuration Wizard[/bold blue] 🏠
-
-Welcome to the interactive service configuration wizard!
-This will guide you through selecting and configuring 
-your home lab infrastructure services.
-
-Features:
-• Service-specific configuration with validation
-• Automatic dependency resolution
-• Secure password generation
-• Profile-based defaults (development vs production)
-• Beautiful interactive experience
-    """.strip()
-
-    console.print(Panel(welcome_text, border_style="blue", padding=(1, 2)))
+def _select_profile(preset: Optional[str]) -> str:
+    if preset:
+        return "dev" if preset in ("dev", "development") else "prod"
+    console.print("\n[bold]📋 Deployment Profile[/bold]")
+    console.print("  • [cyan]prod[/cyan] — production certificates, optimised settings (default)")
+    console.print("  • [cyan]dev[/cyan]  — staging certificates, debug logging, lighter resources")
+    choice = Prompt.ask("Profile", choices=["prod", "dev", "production", "development"], default="prod", show_choices=False)
+    return "dev" if choice in ("dev", "development") else "prod"
 
 
-def select_profile() -> str:
-    """Select deployment profile"""
-    console.print("\n[bold]📋 Profile Selection[/bold]")
-    console.print("Choose your deployment profile:")
-    console.print(
-        "• [cyan]Development[/cyan] - Staging certificates, debug logging, lower resource usage"
+def _collect_core(existing: Dict[str, Any]) -> Dict[str, Any]:
+    console.print("\n[bold]🌐 Core Settings[/bold]")
+    domain = Prompt.ask(
+        "Primary domain  [dim](e.g. homelab.example.com)[/dim]",
+        default=existing.get("domain", "homelab.local"),
+        show_default=False,
     )
-    console.print(
-        "• [cyan]Production[/cyan] - Production certificates, optimized settings, higher security"
+    email = Prompt.ask(
+        "Admin email     [dim](for Let's Encrypt + alerts)[/dim]",
+        default=existing.get("email", "admin@example.com"),
+        show_default=False,
     )
-
-    profile_choice = Prompt.ask(
-        "Profile",
-        choices=["dev", "prod", "development", "production"],
-        default="prod",
-        show_choices=False,
-        console=console,
-    )
-
-    # Normalize profile names
-    if profile_choice in ["dev", "development"]:
-        return "dev"
-    else:
-        return "prod"
+    return {"domain": domain, "email": email}
 
 
-def display_service_categories(schemas: Dict[str, ServiceSchema]) -> None:
-    """Display available services grouped by category"""
+def _select_by_category(
+    schemas: Dict[str, ServiceSchema],
+    already_enabled: Set[str],
+    non_interactive: bool,
+) -> Set[str]:
+    """
+    For each category, show the services it contains and ask "Enable?" per service.
+    Returns the set of service IDs the user said yes to.
+    """
     categories = get_service_categories(schemas)
+    selected: Set[str] = set()
 
-    console.print("\n[bold]📦 Available Services[/bold]")
+    console.print("\n[bold]📦 Service Selection[/bold]")
+    console.print("[dim]You'll be asked about each category. Press Enter to accept the default.[/dim]\n")
 
-    for category, service_ids in categories.items():
-        console.print(f"\n[bold cyan]{category}:[/bold cyan]")
+    for category, service_ids in sorted(categories.items()):
+        # Category header
+        console.print(f"[bold cyan]── {category} ──[/bold cyan]")
 
-        for service_id in sorted(service_ids):
-            schema = schemas[service_id]
-            deps_text = (
-                f" [dim](depends on: {', '.join(schema.dependencies)})[/dim]"
+        for sid in sorted(service_ids):
+            schema = schemas[sid]
+            default_enabled = sid in already_enabled or bool(
+                schema.defaults
+                and (
+                    getattr(schema.defaults, "prod", {}) or {}
+                ).get("enabled", False)
+            )
+            dep_note = (
+                f"  [dim](requires: {', '.join(schema.dependencies)})[/dim]"
                 if schema.dependencies
                 else ""
             )
-            maturity_badge = ""
-
-            if schema.maturity == "alpha":
-                maturity_badge = " [red][ALPHA][/red]"
-            elif schema.maturity == "beta":
-                maturity_badge = " [yellow][BETA][/yellow]"
-
-            console.print(
-                f"  • [white]{schema.name}[/white]{maturity_badge} - {schema.description}{deps_text}"
+            prompt_text = (
+                f"  Enable [white]{schema.name}[/white]"
+                f"  [dim]{schema.description}[/dim]{dep_note}"
             )
 
-
-def select_services(schemas: Dict[str, ServiceSchema]) -> Set[str]:
-    """Interactive service selection"""
-    display_service_categories(schemas)
-
-    console.print("\n[bold]🎯 Service Selection[/bold]")
-    console.print("[dim]Select services by entering their IDs (space-separated):[/dim]")
-    console.print("[dim]Example: traefik postgresql nextcloud[/dim]")
-
-    available_ids = list(schemas.keys())
-    console.print(
-        f"\n[dim]Available service IDs: {', '.join(sorted(available_ids))}[/dim]"
-    )
-
-    while True:
-        try:
-            selection_input = Prompt.ask(
-                "Selected services", default="traefik", console=console
-            )
-
-            selected = set(selection_input.split())
-
-            # Validate all services exist
-            invalid_services = selected - set(available_ids)
-            if invalid_services:
-                console.print(
-                    f"[red]Error: Unknown services: {', '.join(invalid_services)}[/red]"
-                )
-                console.print(
-                    f"[dim]Available: {', '.join(sorted(available_ids))}[/dim]"
-                )
+            if non_interactive:
+                if default_enabled:
+                    selected.add(sid)
                 continue
 
-            if not selected:
-                console.print("[red]Error: At least one service must be selected[/red]")
-                continue
+            if Confirm.ask(prompt_text, default=default_enabled):
+                selected.add(sid)
 
-            return selected
+        console.print()
 
-        except KeyboardInterrupt:
-            console.print("\n[yellow]Selection cancelled[/yellow]")
-            return set()
+    return selected
 
 
-def resolve_dependencies(
-    selected: Set[str], schemas: Dict[str, ServiceSchema]
-) -> List[str]:
-    """Resolve and display service dependencies"""
-    console.print("\n[bold]🔗 Dependency Resolution[/bold]")
+def _configure_service(
+    service_id: str,
+    schema: ServiceSchema,
+    session: WizardSession,
+    existing_config: Dict[str, Any],
+    service: Optional[str] = None,
+) -> tuple[Dict[str, Any], Dict[str, str]]:
+    """
+    Interactively configure a single service.
 
-    graph = DependencyGraph(schemas)
-    resolved = graph.resolve_dependencies(list(selected))
+    Returns:
+        (non_secret_config, secret_env_vars)
+    """
+    console.print(f"\n{'─' * 60}")
+    console.print(f"[bold blue]⚙  Configuring {schema.name}[/bold blue]")
+    if schema.description:
+        console.print(f"[dim]{schema.description}[/dim]")
+    console.print("─" * 60)
 
-    # Show what was added
-    auto_added = set(resolved) - selected
-    if auto_added:
-        console.print("[yellow]Automatically added dependencies:[/yellow]")
-        for service_id in sorted(auto_added):
-            schema = schemas[service_id]
-            console.print(f"  • [yellow]{schema.name}[/yellow] - {schema.description}")
-
-    # Display final service list in dependency order
-    console.print(f"\n[green]✓ Final service list ({len(resolved)} services):[/green]")
-    for i, service_id in enumerate(resolved, 1):
-        schema = schemas[service_id]
-        console.print(f"  {i}. [cyan]{schema.name}[/cyan]")
-
-    return resolved
-
-
-def configure_service(
-    service_id: str, schema: ServiceSchema, session: WizardSession
-) -> Dict[str, Any]:
-    """Configure a single service interactively"""
-    console.print(f"\n" + "=" * 60)
-    console.print(f"[bold blue]⚙️  Configuring {schema.name}[/bold blue]")
-    console.print(f"[dim]{schema.description}[/dim]")
-    console.print("=" * 60)
-
-    # Build context for this service
-    context = session.global_context.copy()
+    context = {**session.global_context}
     profile_defaults = session.get_profile_defaults(service_id)
     context.update(profile_defaults)
 
-    # Add other services' config to context for conditional fields
-    for other_service, other_config in session.service_configs.items():
-        for key, value in other_config.items():
-            context[f"{other_service}.{key}"] = value
+    # Existing values become defaults
+    context.update(existing_config)
 
-    service_config = {}
+    # Inject peer service configs for cross-service conditionals
+    for peer_id, peer_cfg in session.service_configs.items():
+        for k, v in peer_cfg.items():
+            context[f"{peer_id}.{k}"] = v
 
-    # Process fields in order
+    plain_config: Dict[str, Any] = {"enabled": True}
+    secret_vars: Dict[str, str] = {}
+
     for field in schema.fields:
+        if field.key == "enabled":
+            continue
         try:
-            # Apply profile defaults
-            if field.key in profile_defaults:
-                context[field.key] = profile_defaults[field.key]
-
             value = ask_field(field, context)
-            service_config[field.key] = value
             context[field.key] = value
 
+            if _is_secret_field(field.key) and value:
+                env_key = _env_var_name(service_id, field.key)
+                secret_vars[env_key] = str(value)
+                # In config.yaml, store a reference instead of the literal
+                plain_config[field.key] = f"${{{env_key}}}"
+            else:
+                plain_config[field.key] = value
+
         except KeyboardInterrupt:
-            console.print(
-                f"\n[yellow]Configuration of {schema.name} cancelled[/yellow]"
-            )
-            return {}
-        except Exception as e:
-            console.print(f"[red]Error configuring field '{field.key}': {e}[/red]")
-            service_config[field.key] = field.default
+            console.print(f"\n[yellow]Skipped remaining fields for {schema.name}[/yellow]")
+            break
+        except Exception as exc:
+            console.print(f"[red]Error on field '{field.key}': {exc}[/red]")
+            plain_config[field.key] = field.default
 
-    # Ask for custom environment variables
-    try:
-        custom_env = ask_custom_environment_variables()
-        if custom_env:
-            session.custom_env[service_id] = custom_env
-    except KeyboardInterrupt:
-        console.print("\n[yellow]Custom environment variables skipped[/yellow]")
-
-    # Show configuration summary
-    display_field_summary(service_config, schema.name)
-
-    return service_config
+    display_field_summary({k: v for k, v in plain_config.items() if k != "enabled"}, schema.name)
+    return plain_config, secret_vars
 
 
-def show_configuration_summary(session: WizardSession) -> None:
-    """Display complete configuration summary"""
-    console.print("\n" + "=" * 80)
-    console.print("[bold green]📋 Complete Configuration Summary[/bold green]")
-    console.print("=" * 80)
+def _resolve_with_display(
+    selected: Set[str], schemas: Dict[str, ServiceSchema]
+) -> List[str]:
+    console.print("\n[bold]🔗 Resolving dependencies…[/bold]")
+    graph = DependencyGraph(schemas)
+    resolved = graph.resolve_dependencies(list(selected))
 
-    console.print(f"[bold]Profile:[/bold] {session.profile}")
-    console.print(f"[bold]Services:[/bold] {len(session.service_configs)}")
+    auto_added = set(resolved) - selected
+    if auto_added:
+        console.print("[yellow]Auto-adding required dependencies:[/yellow]")
+        for sid in sorted(auto_added):
+            console.print(f"  • [yellow]{schemas[sid].name}[/yellow]")
 
-    # Create summary table
-    table = Table(show_header=True, header_style="bold cyan")
-    table.add_column("Service", style="white", width=20)
-    table.add_column("Status", width=10)
+    enabled_names = [schemas[sid].name for sid in resolved if sid in selected or sid in auto_added]
+    console.print(
+        f"[green]✓ {len(resolved)} service(s) to configure: {', '.join(enabled_names)}[/green]"
+    )
+    return resolved
+
+
+def _print_summary(
+    session: WizardSession,
+    schemas: Dict[str, ServiceSchema],
+) -> None:
+    enabled = [sid for sid in session.resolved_services if session.service_configs.get(sid, {}).get("enabled")]
+    all_ids = set(schemas.keys())
+    disabled = sorted(all_ids - set(enabled))
+
+    console.print("\n[bold]📋 Configuration Summary[/bold]")
+
+    table = Table(show_header=True, header_style="bold cyan", box=None)
+    table.add_column("Service", style="white", width=22)
+    table.add_column("Status", width=12)
     table.add_column("Key Settings", style="dim")
 
-    for service_id in session.resolved_services:
-        config = session.service_configs.get(service_id, {})
-        schema = session.schemas.get(service_id)
-
-        if not config or not schema:
+    for sid in sorted(enabled):
+        cfg = session.service_configs.get(sid, {})
+        schema = schemas.get(sid)
+        if not schema:
             continue
+        settings = [
+            f"{k}={v}"
+            for k, v in cfg.items()
+            if k not in ("enabled",) and not _is_secret_field(k) and v is not None
+        ][:3]
+        table.add_row(schema.name, "[green]✓ enabled[/green]", "; ".join(settings))
 
-        # Determine status
-        enabled = config.get("enabled", False)
-        status = "[green]✓ Enabled[/green]" if enabled else "[red]✗ Disabled[/red]"
-
-        # Key settings (non-sensitive)
-        key_settings = []
-        for key, value in config.items():
-            if key == "enabled":
-                continue
-            if (
-                "password" in key.lower()
-                or "token" in key.lower()
-                or "secret" in key.lower()
-            ):
-                if value:
-                    key_settings.append(f"{key}: [dim]●●●●●●●●[/dim]")
-            else:
-                if isinstance(value, bool):
-                    key_settings.append(f"{key}: {'Yes' if value else 'No'}")
-                elif isinstance(value, list):
-                    key_settings.append(
-                        f"{key}: {', '.join(value) if value else 'none'}"
-                    )
-                elif value:
-                    key_settings.append(f"{key}: {value}")
-
-        settings_text = "; ".join(key_settings[:3])  # Limit to first 3 settings
-        if len(key_settings) > 3:
-            settings_text += f" (+{len(key_settings) - 3} more)"
-
-        table.add_row(schema.name, status, settings_text)
+    for sid in disabled:
+        schema = schemas.get(sid)
+        if schema:
+            table.add_row(schema.name, "[dim]disabled[/dim]", "")
 
     console.print(table)
 
-    # Show custom environment variables summary
-    if session.custom_env:
-        console.print(f"\n[bold]Custom Environment Variables:[/bold]")
-        for service_id, env_vars in session.custom_env.items():
-            schema = session.schemas.get(service_id)
-            if schema and env_vars:
-                console.print(f"  • {schema.name}: {len(env_vars)} variables")
+    console.print(
+        f"\n[bold]Enabled:[/bold] {', '.join(schemas[s].name for s in sorted(enabled)) or 'none'}"
+    )
+    console.print(
+        f"[bold]Disabled:[/bold] {len(disabled)} service(s)"
+    )
+    if session.env_vars:
+        console.print(f"\n[dim]🔐 {len(session.env_vars)} secret(s) will be written to .env[/dim]")
 
 
-def confirm_configuration(session: WizardSession) -> bool:
-    """Confirm the configuration before saving"""
-    console.print("\n[bold]💾 Save Configuration?[/bold]")
-
-    if not Confirm.ask("Save this configuration?", default=True, console=console):
-        return False
-
-    # Option to edit specific services
-    while Confirm.ask(
-        "Edit any service configuration?", default=False, console=console
-    ):
-        service_names = [session.schemas[sid].name for sid in session.resolved_services]
-        console.print(f"Services: {', '.join(service_names)}")
-
-        service_input = Prompt.ask("Service ID to edit", console=console)
-        if service_input in session.schemas:
-            schema = session.schemas[service_input]
-            session.service_configs[service_input] = configure_service(
-                service_input, schema, session
-            )
-        else:
-            console.print(f"[red]Unknown service: {service_input}[/red]")
-
-    return True
-
-
-def run_wizard(
-    schemas_dir: Path, profile: Optional[str] = None
-) -> Optional[WizardSession]:
-    """
-    Run the complete configuration wizard
-
-    Args:
-        schemas_dir: Directory containing service schemas
-        profile: Optional profile override
-
-    Returns:
-        WizardSession with complete configuration, or None if cancelled
-    """
-    try:
-        display_welcome()
-
-        # Initialize session
-        session = WizardSession()
-        session.load_schemas(schemas_dir)
-
-        if not session.schemas:
-            console.print("[red]Error: No service schemas found[/red]")
-            return None
-
-        # Select profile
-        if not profile:
-            profile = select_profile()
-        session.profile = profile
-        console.print(f"[green]✓ Selected profile: {profile}[/green]")
-
-        # Select services
-        selected = select_services(session.schemas)
-        if not selected:
-            return None
-
-        session.selected_services = selected
-
-        # Resolve dependencies
-        session.resolved_services = resolve_dependencies(selected, session.schemas)
-
-        # Configure each service
-        for service_id in session.resolved_services:
-            schema = session.schemas[service_id]
-            config = configure_service(service_id, schema, session)
-            session.service_configs[service_id] = config
-
-            # Skip remaining if this service was cancelled
-            if not config:
-                console.print("[yellow]Configuration cancelled[/yellow]")
-                return None
-
-        # Show summary and confirm
-        show_configuration_summary(session)
-
-        if not confirm_configuration(session):
-            console.print("[yellow]Configuration not saved[/yellow]")
-            return None
-
-        console.print(
-            "\n[bold green]✅ Configuration completed successfully![/bold green]"
-        )
-        return session
-
-    except KeyboardInterrupt:
-        console.print("\n\n[yellow]Wizard cancelled by user[/yellow]")
-        return None
-    except Exception as e:
-        console.print(f"\n[red]Unexpected error: {e}[/red]")
-        return None
-
-
-def create_dependency_tree_display(session: WizardSession) -> None:
-    """Display service dependencies as a tree"""
-    console.print("\n[bold]🌳 Service Dependency Tree[/bold]")
-
-    graph = DependencyGraph(session.schemas)
-    tree = Tree("Services")
-
-    # Find root services (no dependencies within selected set)
-    selected_set = set(session.resolved_services)
-    roots = []
-
-    for service_id in session.resolved_services:
-        deps = graph.get_dependencies(service_id) & selected_set
-        if not deps:
-            roots.append(service_id)
-
-    def add_service_branch(parent_tree, service_id: str, visited: Set[str]):
-        if service_id in visited:
-            parent_tree.add(f"[dim]{session.schemas[service_id].name} (circular)[/dim]")
-            return
-
-        visited.add(service_id)
-        schema = session.schemas[service_id]
-        enabled = session.is_service_enabled(service_id)
-        status = "[green]✓[/green]" if enabled else "[red]✗[/red]"
-
-        service_branch = parent_tree.add(f"{status} [cyan]{schema.name}[/cyan]")
-
-        # Add dependents
-        dependents = graph.get_dependents(service_id) & selected_set
-        for dependent in sorted(dependents):
-            add_service_branch(service_branch, dependent, visited.copy())
-
-    # Add root services to tree
-    for root in sorted(roots):
-        add_service_branch(tree, root, set())
-
-    console.print(tree)
+# ── Public class ──────────────────────────────────────────────────────────────
 
 
 class WizardOrchestrator:
     """
-    Main orchestrator class for the configuration wizard
+    Main orchestrator for labctl init.
+
+    Usage::
+
+        orch = WizardOrchestrator(schemas)
+        config_data = orch.run_wizard(profile="prod")
+        # config_data["env_vars"] → write to .env
+        # rest                    → write to config.yaml
     """
 
     def __init__(self, schemas: Dict[str, ServiceSchema]):
         self.schemas = schemas
 
-    def run_wizard(self, profile: Optional[str] = None) -> dict:
-        """
-        Run the complete configuration wizard and return config data
+    # ── Single-service reconfigure (--service flag) ────────────────────────
 
-        Args:
-            profile: Optional profile override (dev/prod)
+    def run_single_service(
+        self,
+        service_id: str,
+        existing_config: Dict[str, Any],
+        profile: str = "prod",
+    ) -> tuple[Dict[str, Any], Dict[str, str]]:
+        """Re-configure just one service, returning (config, env_vars)."""
+        if service_id not in self.schemas:
+            raise ValueError(f"Unknown service: {service_id}")
+        schema = self.schemas[service_id]
+        session = WizardSession(profile)
+        session.schemas = self.schemas
+        session.global_context = existing_config.get("core", {})
+        cfg, env = _configure_service(service_id, schema, session, existing_config.get("services", {}).get(service_id, {}))
+        return cfg, env
 
-        Returns:
-            Configuration dictionary ready for saving
+    # ── Full wizard ────────────────────────────────────────────────────────
+
+    def run_wizard(
+        self,
+        profile: Optional[str] = None,
+        existing_config: Optional[Dict[str, Any]] = None,
+        non_interactive: bool = False,
+        single_service: Optional[str] = None,
+    ) -> Dict[str, Any]:
         """
+        Run the full interactive wizard.
+
+        Returns a dict with keys:
+          version, profile, core, services, custom_env, env_vars
+        """
+        existing = existing_config or {}
+        ex_services = existing.get("services", {})
+        ex_core = existing.get("core", {})
+
         try:
-            display_welcome()
+            console.print(
+                Panel.fit(
+                    "🏠 [bold blue]Home Lab Setup Wizard v2[/bold blue]\n\n"
+                    "[dim]Category-by-category service selection.\n"
+                    "Existing values are shown as defaults — press Enter to keep them.[/dim]",
+                    border_style="blue",
+                )
+            )
 
-            # Initialize session
             session = WizardSession()
             session.schemas = self.schemas
 
-            if not session.schemas:
-                console.print("[red]Error: No service schemas found[/red]")
-                raise ValueError("No service schemas available")
+            # --- Single-service shortcut ---
+            if single_service:
+                session.profile = profile or "prod"
+                session.global_context = ex_core
+                cfg, env = _configure_service(
+                    single_service,
+                    self.schemas[single_service],
+                    session,
+                    ex_services.get(single_service, {}),
+                )
+                result = dict(existing)
+                result.setdefault("services", {})[single_service] = cfg
+                result.setdefault("env_vars", {}).update(env)
+                return result
 
-            # Select profile
-            if not profile:
-                profile = select_profile()
-            session.profile = profile
-            console.print(f"[green]✓ Selected profile: {profile}[/green]")
+            # --- Profile ---
+            if not non_interactive:
+                session.profile = _select_profile(profile)
+            else:
+                session.profile = profile or "prod"
 
-            # Core configuration
-            console.print("\n[bold]🌐 Core Configuration[/bold]")
-            domain = Prompt.ask(
-                "Primary domain", default="homelab.local", console=console
-            )
+            # --- Core ---
+            if not non_interactive:
+                core = _collect_core(ex_core)
+            else:
+                core = {
+                    "domain": ex_core.get("domain", "homelab.local"),
+                    "email": ex_core.get("email", "admin@homelab.local"),
+                }
+            session.global_context = core
 
-            email = Prompt.ask(
-                "Admin email", default="admin@example.com", console=console
-            )
+            # --- Category-based selection ---
+            already_enabled: Set[str] = {
+                sid for sid, cfg in ex_services.items()
+                if isinstance(cfg, dict) and cfg.get("enabled")
+            }
 
-            session.set_global_context(
-                {"domain": domain, "email": email, "profile": profile}
-            )
+            if not non_interactive:
+                selected = _select_by_category(self.schemas, already_enabled, non_interactive=False)
+            else:
+                # Non-interactive: keep existing enabled set, or default minimal stack
+                selected = already_enabled or {"traefik", "postgresql", "redis", "monitoring"}
+                selected = {s for s in selected if s in self.schemas}
 
-            # Select services
-            selected = select_services(session.schemas)
             if not selected:
-                raise ValueError("No services selected")
+                raise ValueError("No services selected — cancelling.")
 
             session.selected_services = selected
 
-            # Resolve dependencies
-            session.resolved_services = resolve_dependencies(selected, session.schemas)
+            # --- Dependency resolution ---
+            session.resolved_services = _resolve_with_display(selected, self.schemas)
 
-            # Configure each service
-            for service_id in session.resolved_services:
-                schema = session.schemas[service_id]
-                config = configure_service(service_id, schema, session)
-                session.service_configs[service_id] = config
+            # --- Per-service configuration ---
+            for sid in session.resolved_services:
+                schema = self.schemas[sid]
+                existing_svc = ex_services.get(sid, {})
 
-                # Skip remaining if this service was cancelled
-                if not config:
-                    console.print("[yellow]Configuration cancelled[/yellow]")
-                    raise ValueError("Configuration cancelled")
+                if non_interactive:
+                    # Use profile defaults, don't prompt
+                    defaults = session.get_profile_defaults(sid)
+                    plain_cfg = {"enabled": True, **defaults}
+                    env_vars: Dict[str, str] = {}
+                    # Auto-generate secrets
+                    for field in schema.fields:
+                        if field.key == "enabled":
+                            continue
+                        if _is_secret_field(field.key) and field.generate:
+                            length = getattr(field, "length", 32) or 32
+                            val = generate_password(length)
+                            env_key = _env_var_name(sid, field.key)
+                            env_vars[env_key] = val
+                            plain_cfg[field.key] = f"${{{env_key}}}"
+                else:
+                    plain_cfg, env_vars = _configure_service(sid, schema, session, existing_svc)
 
-            # Show summary and confirm
-            show_configuration_summary(session)
+                session.service_configs[sid] = plain_cfg
+                session.env_vars.update(env_vars)
 
-            if not confirm_configuration(session):
-                console.print("[yellow]Configuration not saved[/yellow]")
-                raise ValueError("Configuration not confirmed")
+            # --- Summary + confirm ---
+            _print_summary(session, self.schemas)
 
-            # Convert session to config format
-            config_data = self._session_to_config(session)
+            if not non_interactive:
+                if not Confirm.ask("\n💾 Save this configuration?", default=True):
+                    raise ValueError("Configuration not confirmed — not saved.")
 
-            console.print(
-                "\n[bold green]✅ Configuration completed successfully![/bold green]"
-            )
-            return config_data
+            return self._build_output(session, core)
 
         except KeyboardInterrupt:
             console.print("\n\n[yellow]Wizard cancelled by user[/yellow]")
             raise
-        except Exception as e:
-            console.print(f"\n[red]Error: {e}[/red]")
-            raise
 
-    def _session_to_config(self, session: WizardSession) -> dict:
-        """
-        Convert wizard session to configuration dictionary format
+    # ── Internal ──────────────────────────────────────────────────────────
 
-        Args:
-            session: Completed wizard session
-
-        Returns:
-            Configuration dictionary
-        """
-        config_data = {
+    def _build_output(self, session: WizardSession, core: Dict[str, Any]) -> Dict[str, Any]:
+        """Convert session → config dict ready for saving."""
+        return {
             "version": 2,
             "profile": session.profile,
-            "core": session.global_context,
-            "services": {},
+            "core": core,
+            "services": {
+                sid: cfg
+                for sid, cfg in session.service_configs.items()
+                if cfg
+            },
             "custom_env": session.custom_env,
-            "env_vars": {},
+            "env_vars": session.env_vars,
         }
-
-        # Convert service configs
-        for service_id, service_config in session.service_configs.items():
-            if service_config:  # Skip empty configs
-                config_data["services"][service_id] = service_config
-
-        # Extract environment variables that should go to .env
-        env_vars = {}
-        for service_id, service_config in session.service_configs.items():
-            for field_key, field_value in service_config.items():
-                # Check if this field should generate an environment variable
-                if isinstance(field_value, str) and field_value.startswith("$("):
-                    # This is a placeholder for generated value
-                    if "password" in field_key.lower():
-                        env_key = f"{service_id.upper()}_{field_key.upper()}"
-                        env_vars[env_key] = "$(generate_password)"
-
-        # Add some common generated passwords
-        if "postgresql" in session.service_configs:
-            env_vars["POSTGRES_PASSWORD"] = "$(generate_password)"
-        if "redis" in session.service_configs:
-            env_vars["REDIS_PASSWORD"] = "$(generate_password)"
-        if "monitoring" in session.service_configs:
-            env_vars["GRAFANA_ADMIN_PASSWORD"] = "$(generate_password)"
-
-        config_data["env_vars"] = env_vars
-
-        return config_data
