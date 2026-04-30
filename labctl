@@ -1,5 +1,33 @@
-#!/bin/bash
+#!/usr/bin/env bash
+# labctl — Project-local launcher for the Enterprise Home Lab CLI
+#
+# If the venv is missing, this script provides a helpful error message
+# pointing to bootstrap.sh instead of a cryptic Python traceback.
+#
+# This file is auto-updated by bootstrap.sh — do not edit manually.
+
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-source "$SCRIPT_DIR/venv/bin/activate"
-export PYTHONPATH="$SCRIPT_DIR/cli:$PYTHONPATH"
-python3 -m labctl.cli.main "$@"
+VENV_DIR="$SCRIPT_DIR/venv"
+
+if [ ! -d "$VENV_DIR" ]; then
+  echo "[ERROR] Virtual environment not found at $VENV_DIR"
+  echo ""
+  echo "  Run the bootstrap script to set everything up:"
+  echo "    ./bootstrap.sh"
+  echo ""
+  echo "  Or, if you just want to install the package manually:"
+  echo "    python3 -m venv venv && source venv/bin/activate"
+  echo "    pip install -e .[dev]"
+  echo ""
+  exit 1
+fi
+
+if [ ! -x "$VENV_DIR/bin/python3" ]; then
+  echo "[ERROR] Virtual environment appears corrupt (no python3 binary at $VENV_DIR/bin/python3)"
+  echo "  Try removing the venv and re-running: ./bootstrap.sh"
+  exit 1
+fi
+
+source "$VENV_DIR/bin/activate"
+export PYTHONPATH="$SCRIPT_DIR/cli:${PYTHONPATH:-}"
+exec python3 -m labctl.cli.main "$@"

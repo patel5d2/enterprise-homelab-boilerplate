@@ -29,13 +29,6 @@ class ReverseProxyConfig(BaseModel):
     staging: bool = Field(default=False, description="Use Let's Encrypt staging")
 
 
-class MonitoringConfig(BaseModel):
-    """Monitoring stack configuration"""
-
-    enabled: bool = Field(default=True, description="Enable monitoring stack")
-    retention: str = Field(default="30d", description="Metrics retention period")
-    prometheus_port: int = Field(default=9090, description="Prometheus port")
-    grafana_port: int = Field(default=3000, description="Grafana port")
 
 
 class GitLabConfig(BaseModel):
@@ -59,12 +52,6 @@ class SecurityConfig(BaseModel):
     )
 
 
-class VaultConfig(BaseModel):
-    """HashiCorp Vault configuration"""
-
-    enabled: bool = Field(default=False, description="Enable Vault")
-    auto_unseal: bool = Field(default=True, description="Enable auto-unseal")
-    ui_enabled: bool = Field(default=True, description="Enable Vault UI")
 
 
 class NetworkingConfig(BaseModel):
@@ -546,7 +533,7 @@ class LabConfig(BaseModel):
 
         with open(config_path, "w") as f:
             # Convert to dict and handle Enums
-            data = self.dict()
+            data = self.model_dump()
             if "profile" in data:
                 data["profile"] = (
                     data["profile"].value
@@ -731,7 +718,7 @@ class Config(BaseModel):
 
         with open(config_path, "w") as f:
             yaml.dump(
-                self.dict(), f, default_flow_style=False, indent=2, sort_keys=False
+                self.model_dump(), f, default_flow_style=False, indent=2, sort_keys=False
             )
 
     def validate_requirements(self) -> List[str]:

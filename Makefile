@@ -1,7 +1,7 @@
 # Enterprise Home Lab Boilerplate Makefile
 # Provides convenient commands for managing the home lab infrastructure
 
-.PHONY: help init build deploy status stop clean install dev test lint format docs
+.PHONY: help bootstrap bootstrap-ci bootstrap-dry-run init build deploy status stop clean install install-dev dev test lint format docs doctor guide check-prereqs version quickstart backup restore monitor security-scan docker-build docker-pull docker-logs docker-clean
 
 # Virtual Environment
 VENV ?= venv
@@ -17,11 +17,26 @@ help: ## Show this help message
 	@echo "Available commands:"
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | sort | awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[36m%-15s\033[0m %s\n", $$1, $$2}'
 
+# Bootstrap — One-command fresh machine setup (Phase 1)
+bootstrap: ## One-command fresh-machine setup (interactive)
+	@echo "🚀 Starting Enterprise Home Lab bootstrap..."
+	@bash bootstrap.sh
+
+bootstrap-ci: ## Bootstrap in CI/non-interactive mode (no prompts)
+	@echo "🚀 Starting non-interactive bootstrap (CI mode)..."
+	@bash bootstrap.sh --non-interactive
+
+bootstrap-dry-run: ## Show what bootstrap would do without doing it
+	@echo "🔍 Dry-run bootstrap..."
+	@bash bootstrap.sh --dry-run
+
 # Installation and Setup
-# Installation and Setup
-install: ## Install CLI dependencies
+install: ## Install CLI dependencies (requires Python 3.11+)
 	@echo "📦 Installing CLI dependencies..."
+	@python3 -c 'import sys; sys.exit(0 if sys.version_info >= (3,11) else 1)' 2>/dev/null || \
+	  { echo "❌ Python 3.11+ required. Current: $$(python3 --version 2>&1). Run: ./bootstrap.sh"; exit 1; }
 	@if [ ! -d "$(VENV)" ]; then python3 -m venv $(VENV); fi
+	$(PIP) install --quiet --upgrade pip
 	$(PIP) install -e .
 	@echo "✅ Installation complete!"
 
@@ -141,11 +156,13 @@ quickstart: install init validate build deploy status ## Complete quickstart set
 	@echo ""
 
 # Utilities
+doctor: ## Run post-install health check
+	@echo "🩺 Running health check..."
+	@$(LABCTL) doctor 2>/dev/null || { echo "doctor command not yet registered — run: ./labctl --help"; }
+
 check-prereqs: ## Check prerequisites
 	@echo "🔍 Checking prerequisites..."
-	@command -v docker >/dev/null 2>&1 || { echo "❌ Docker is required but not installed."; exit 1; }
-	@command -v python3 >/dev/null 2>&1 || { echo "❌ Python 3 is required but not installed."; exit 1; }
-	@echo "✅ Prerequisites check passed!"
+	@bash scripts/bootstrap/check_prereqs.sh
 
 version: ## Show version information
 	@echo "📋 Version information:"
