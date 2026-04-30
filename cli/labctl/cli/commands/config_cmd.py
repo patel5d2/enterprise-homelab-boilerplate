@@ -153,7 +153,7 @@ def _display_config_info(config: Config, config_path: Path) -> None:
     console.print(table)
 
     # Show service URLs
-    console.print(f"\n[bold]🌐 Service URLs:[/bold]")
+    console.print("\n[bold]🌐 Service URLs:[/bold]")
     urls = config.get_service_urls()
     for service, url in urls.items():
         if (
@@ -164,10 +164,10 @@ def _display_config_info(config: Config, config_path: Path) -> None:
         ):
             console.print(f"  • {service.title()}: {url}")
 
-    console.print(f"\n[bold]🔧 Actions:[/bold]")
-    console.print(f"  • View content: [cyan]labctl config --show[/cyan]")
-    console.print(f"  • Edit config: [cyan]labctl config --edit[/cyan]")
-    console.print(f"  • Validate: [cyan]labctl validate[/cyan]")
+    console.print("\n[bold]🔧 Actions:[/bold]")
+    console.print("  • View content: [cyan]labctl config --show[/cyan]")
+    console.print("  • Edit config: [cyan]labctl config --edit[/cyan]")
+    console.print("  • Validate: [cyan]labctl validate[/cyan]")
 
 
 def _get_config_value(config: Config, key: str):

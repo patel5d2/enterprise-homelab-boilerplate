@@ -14,23 +14,18 @@ Re-running is safe — existing values shown as defaults.
 
 from __future__ import annotations
 
-import secrets as _secrets
-import string
-from pathlib import Path
 from typing import Any, Dict, List, Optional, Set
 
 from rich.console import Console
 from rich.panel import Panel
 from rich.prompt import Confirm, Prompt
 from rich.table import Table
-from rich.text import Text
+from rich.table import Table
 
 from ...core.services import (
     DependencyGraph,
     ServiceSchema,
     get_service_categories,
-    load_service_schemas,
-    resolve_with_dependencies,
 )
 from .prompter import ask_field, display_field_summary, generate_password
 
@@ -92,7 +87,12 @@ def _select_profile(preset: Optional[str]) -> str:
     console.print("\n[bold]📋 Deployment Profile[/bold]")
     console.print("  • [cyan]prod[/cyan] — production certificates, optimised settings (default)")
     console.print("  • [cyan]dev[/cyan]  — staging certificates, debug logging, lighter resources")
-    choice = Prompt.ask("Profile", choices=["prod", "dev", "production", "development"], default="prod", show_choices=False)
+    choice = Prompt.ask(
+        "Profile",
+        choices=["prod", "dev", "production", "development"],
+        default="prod",
+        show_choices=False,
+    )
     return "dev" if choice in ("dev", "development") else "prod"
 
 
@@ -124,7 +124,9 @@ def _select_by_category(
     selected: Set[str] = set()
 
     console.print("\n[bold]📦 Service Selection[/bold]")
-    console.print("[dim]You'll be asked about each category. Press Enter to accept the default.[/dim]\n")
+    console.print(
+        "[dim]You'll be asked about each category. Press Enter to accept the default.[/dim]\n"
+    )
 
     for category, service_ids in sorted(categories.items()):
         # Category header
@@ -245,7 +247,11 @@ def _print_summary(
     session: WizardSession,
     schemas: Dict[str, ServiceSchema],
 ) -> None:
-    enabled = [sid for sid in session.resolved_services if session.service_configs.get(sid, {}).get("enabled")]
+    enabled = [
+        sid
+        for sid in session.resolved_services
+        if session.service_configs.get(sid, {}).get("enabled")
+    ]
     all_ids = set(schemas.keys())
     disabled = sorted(all_ids - set(enabled))
 
@@ -318,7 +324,12 @@ class WizardOrchestrator:
         session = WizardSession(profile)
         session.schemas = self.schemas
         session.global_context = existing_config.get("core", {})
-        cfg, env = _configure_service(service_id, schema, session, existing_config.get("services", {}).get(service_id, {}))
+        cfg, env = _configure_service(
+            service_id,
+            schema,
+            session,
+            existing_config.get("services", {}).get(service_id, {}),
+        )
         return cfg, env
 
     # ── Full wizard ────────────────────────────────────────────────────────

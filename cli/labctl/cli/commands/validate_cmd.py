@@ -161,7 +161,7 @@ def _show_config_summary(config: LabConfig) -> None:
     # URLs preview
     urls = config.get_service_urls()
     if urls:
-        console.print(f"\n[bold]🌐 Service URLs (after deployment):[/bold]")
+        console.print("\n[bold]🌐 Service URLs (after deployment):[/bold]")
         for service, url in list(urls.items())[:5]:  # Show first 5
             console.print(f"  • [cyan]{url}[/cyan]")
         if len(urls) > 5:

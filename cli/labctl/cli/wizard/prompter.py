@@ -8,15 +8,11 @@ using Rich for UI and comprehensive validation.
 import re
 import secrets
 import string
-from typing import Any, Dict, List, Optional, Union
+from typing import Any, Dict, List
 
-from rich.columns import Columns
 from rich.console import Console
-from rich.panel import Panel
-from rich.progress import Progress, SpinnerColumn, TextColumn
 from rich.prompt import Confirm, IntPrompt, Prompt
 from rich.table import Table
-from rich.text import Text
 
 from ...core.services.schema import FieldSchema, FieldType
 
@@ -99,7 +95,8 @@ class ConditionalExpressionEvaluator:
 
             # If we can't parse the expression, default to showing the field
             console.print(
-                f"[yellow]Warning: Could not parse expression '{expression}', defaulting to true[/yellow]"
+                f"[yellow]Warning: Could not parse expression '{expression}', "
+                f"defaulting to true[/yellow]"
             )
             return True
 
@@ -178,7 +175,7 @@ def validate_field_value(field: FieldSchema, value: Any) -> Any:
 
         if field.validate_regex:
             if not re.match(field.validate_regex, value):
-                raise ValidationError(f"Value does not match required format")
+                raise ValidationError("Value does not match required format")
 
     elif field.type == FieldType.PASSWORD:
         value = str(value)
@@ -257,7 +254,7 @@ def prompt_password(field: FieldSchema, default: Any = None) -> str:
         ):
             length = field.length or 24
             generated = generate_password(length, ensure_complexity=True)
-            console.print(f"[green]✓[/green] Generated secure password")
+            console.print("[green]✓[/green] Generated secure password")
             return generated
 
     prompt_text = field.label
@@ -277,7 +274,7 @@ def prompt_password(field: FieldSchema, default: Any = None) -> str:
             if not value and field.generate:
                 length = field.length or 24
                 value = generate_password(length, ensure_complexity=True)
-                console.print(f"[green]✓[/green] Generated secure password")
+                console.print("[green]✓[/green] Generated secure password")
 
             return validate_field_value(field, value)
         except ValidationError as e:

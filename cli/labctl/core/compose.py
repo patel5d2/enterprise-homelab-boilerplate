@@ -8,9 +8,7 @@ from typing import Any, Dict, List, Optional, Union
 import yaml
 from rich.console import Console
 
-from .config import BaseServiceConfig, Config, LabConfig
-from .secrets import load_or_create_env
-from .services.deps import resolve_with_dependencies
+from .config import Config, LabConfig
 from .services.schema import ServiceSchema, load_service_schemas
 
 console = Console()
@@ -428,9 +426,6 @@ class ComposeGenerator:
         """Build Traefik labels from schema"""
         labels = []
 
-        # Get domain from config
-        domain = self._get_domain()
-
         for label_spec in schema.compose.labels:
             # Handle template substitution using the centralized method
             label = self._substitute_template(label_spec, service_id, service_config)
@@ -522,22 +517,26 @@ class ComposeGenerator:
                     user_val = service_config.get(user_field, "admin")
                 elif hasattr(service_config, user_field):
                     user_val = getattr(service_config, user_field)
-                elif user_field == "dashboard_user" and hasattr(service_config, "dashboard_username"):
+                elif user_field == "dashboard_user" and hasattr(
+                    service_config, "dashboard_username"
+                ):
                     user_val = getattr(service_config, "dashboard_username")
 
                 # For password/hash, check if we have a pre-calculated hash
                 hash_val = None
-                if hasattr(service_config, "dashboard_auth_hash") and service_config.dashboard_auth_hash:
+                if hasattr(
+                    service_config, "dashboard_auth_hash"
+                ) and service_config.dashboard_auth_hash:
                     hash_val = service_config.dashboard_auth_hash
                 
-                # If no hash, we should ideally generate it, but for now let's use a placeholder or environment variable
-                # The .env template uses TRAEFIK_DASHBOARD_USERS
+                # If no hash, use a placeholder or environment variable
                 if not hash_val:
                     replacement = "${TRAEFIK_DASHBOARD_USERS}"
                 else:
                     replacement = f"{user_val}:{hash_val}"
                 
-                result = result.replace(f"${{generate:htpasswd:{user_field}:{pass_field}}}", replacement)
+                target_str = f"${{generate:htpasswd:{user_field}:{pass_field}}}"
+                result = result.replace(target_str, replacement)
 
         # Handle from_field:field_name
         if "${from_field:" in result:
@@ -552,7 +551,8 @@ class ComposeGenerator:
                     value = getattr(service_config, field_name)
                 
                 if value is not None:
-                    result = result.replace(f"${{from_field:{field_name}}}", str(value))
+                    target_str = f"${{from_field:{field_name}}}"
+                    result = result.replace(target_str, str(value))
 
         return result
 

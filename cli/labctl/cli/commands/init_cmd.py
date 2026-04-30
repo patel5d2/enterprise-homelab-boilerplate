@@ -14,13 +14,11 @@ from typing import Optional
 
 import yaml
 from rich.console import Console
-from rich.panel import Panel
 from rich.prompt import Confirm, Prompt
 from rich.table import Table
 
 from ...core.config_writer import save_config_to_yaml
 from ...core.exceptions import HomeLabError
-from ...core.secrets import load_or_create_env
 from ...core.services.schema import load_service_schemas
 from ..wizard.orchestrator import WizardOrchestrator
 
@@ -57,7 +55,10 @@ def run(
         console.print(f"[green]✓ Configuration already exists at {config_file}[/green]")
 
         if non_interactive or not interactive:
-            console.print("[dim]Skipping init (use --force to overwrite, --service to reconfigure one service)[/dim]")
+            console.print(
+                "[dim]Skipping init (use --force to overwrite,"
+                " --service to reconfigure one service)[/dim]"
+            )
             _show_next_steps(existing_config)
             return
 
@@ -203,7 +204,11 @@ def _show_next_steps(config: dict) -> None:
         console.print(f"[dim]Disabled: {disabled_count} other service(s)[/dim]")
 
     # Service URLs
-    urls = {s: f"https://{s}.{domain}" for s in enabled if s not in ("postgresql", "redis", "mongodb")}
+    urls = {
+        s: f"https://{s}.{domain}"
+        for s in enabled
+        if s not in ("postgresql", "redis", "mongodb")
+    }
     if urls:
         console.print("\n[bold]🌐 Service URLs (after deploy):[/bold]")
         for svc, url in list(urls.items())[:6]:

@@ -9,7 +9,6 @@ from typing import List, Optional
 from rich.console import Console
 from rich.progress import Progress
 
-from ...core.config import Config
 from ...core.exceptions import HomeLabError
 
 console = Console()
@@ -59,7 +58,7 @@ def run(
                 _cleanup_images()
                 progress.update(stop_task, advance=20)
 
-        console.print(f"\n[green]✅ Services stopped successfully[/green]")
+        console.print("\n[green]✅ Services stopped successfully[/green]")
 
         if remove_volumes:
             console.print(
@@ -80,7 +79,7 @@ def _stop_services(compose_file: Path, services: Optional[List[str]]) -> None:
         cmd.extend(services)
 
     try:
-        result = subprocess.run(
+        subprocess.run(
             cmd,
             cwd=compose_file.parent if compose_file.parent.name != "." else Path.cwd(),
             capture_output=True,

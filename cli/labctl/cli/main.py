@@ -4,7 +4,6 @@ Home Lab CLI - Main application entry point
 
 import os
 import sys
-from pathlib import Path
 from typing import Optional
 
 import typer
@@ -12,7 +11,6 @@ from rich import print as rprint
 from rich.console import Console
 from rich.panel import Panel
 
-from ..core.config import Config
 from ..core.exceptions import HomeLabError
 from .commands import (
     build_cmd,

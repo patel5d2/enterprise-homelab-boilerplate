@@ -6,7 +6,7 @@ detecting circular dependencies, and ordering services for deployment.
 """
 
 from collections import defaultdict, deque
-from typing import Dict, List, Optional, Set, Tuple
+from typing import Dict, List, Set
 
 from rich.console import Console
 

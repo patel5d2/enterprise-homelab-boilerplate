@@ -85,7 +85,7 @@ def run(
             progress.update(task, advance=20)
 
         console.print(
-            f"\n[green]✅ Docker Compose configuration built successfully![/green]"
+            "\n[green]✅ Docker Compose configuration built successfully![/green]"
         )
         console.print(f"[dim]✓ Created {compose_file.name}[/dim]")
         console.print(f"[dim]✓ Created {env_file.name}[/dim]")
@@ -100,12 +100,12 @@ def _show_next_steps(config, output_path: Path) -> None:
 
     console.print("\n[bold]🎯 Next Steps:[/bold]")
     console.print(f"  1. Review generated files in [cyan]{output_path}[/cyan]")
-    console.print(f"  2. Update environment variables in [cyan].env.template[/cyan]")
-    console.print(f"  3. Deploy with: [cyan]labctl deploy[/cyan]")
-    console.print(f"  4. Check status: [cyan]labctl status[/cyan]")
+    console.print("  2. Update environment variables in [cyan].env.template[/cyan]")
+    console.print("  3. Deploy with: [cyan]labctl deploy[/cyan]")
+    console.print("  4. Check status: [cyan]labctl status[/cyan]")
 
     # Show service URLs that will be available
-    console.print(f"\n[bold]🌐 Services (after deployment):[/bold]")
+    console.print("\n[bold]🌐 Services (after deployment):[/bold]")
 
     # Handle both v1 and v2 configs
     try:
@@ -122,8 +122,8 @@ def _show_next_steps(config, output_path: Path) -> None:
                     console.print(
                         f"  • {service_id.title()}: https://{service_id}.{domain}"
                     )
-    except Exception as e:
-        console.print(f"  [dim]Service URLs will be available after deployment[/dim]")
+    except Exception:
+        console.print("  [dim]Service URLs will be available after deployment[/dim]")
 
     console.print(
         f"\n[dim]💡 Deploy all services: docker compose -f {output_path}/docker-compose.yml up -d[/dim]"

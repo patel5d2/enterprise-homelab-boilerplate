@@ -4,14 +4,8 @@ Test suite for services v2 schemas
 """
 
 from pathlib import Path
-import sys
-import os
-
-# Add parent directory to path for imports
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
-
-from cli.labctl.core.services import load_service_schemas, DependencyGraph
-from cli.labctl.core.services.schema import ServiceSchema
+from labctl.core.services import load_service_schemas, DependencyGraph
+from labctl.core.services.schema import ServiceSchema
 
 # Path to services-v2 directory
 SERVICES_V2_DIR = Path(__file__).parent.parent / "config" / "services-v2"

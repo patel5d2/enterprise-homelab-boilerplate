@@ -12,7 +12,7 @@ from rich.table import Table
 
 from ...core.config import Config
 from ...core.exceptions import HomeLabError
-from ...core.health import HealthChecker
+from ...core.exceptions import HomeLabError
 
 console = Console()
 

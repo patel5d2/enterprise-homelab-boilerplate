@@ -3,13 +3,12 @@ Health checking module for Home Lab services
 """
 
 import subprocess
-from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict
 
 import requests
 
 from .config import Config
-from .exceptions import HealthCheckError, NetworkError
+from .exceptions import HomeLabError  # noqa: F401 — re-exported for callers
 
 
 class HealthChecker:

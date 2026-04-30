@@ -233,7 +233,7 @@ def configure_dashboard() -> Tuple[bool, Optional[Dict[str, str]]]:
 
     # Generate a secure password
     password = generate_password(16, charset="alphanumeric_symbols")
-    console.print(f"[green]Generated secure password for dashboard access[/green]")
+    console.print("[green]Generated secure password for dashboard access[/green]")
 
     # Create htpasswd hash for Traefik
     htpasswd_hash = generate_htpasswd_hash(username, password)

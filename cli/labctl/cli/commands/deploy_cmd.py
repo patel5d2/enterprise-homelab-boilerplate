@@ -7,12 +7,12 @@ import time
 from pathlib import Path
 from typing import List, Optional
 
+import yaml
 from rich.console import Console
 from rich.progress import Progress
 
-from ...core.config import Config
+from ...core.config import Config, LabConfig
 from ...core.exceptions import DeploymentError, HomeLabError
-from ...core.health import HealthChecker
 
 console = Console()
 
@@ -35,14 +35,9 @@ def run(
         raise HomeLabError(f"Configuration file not found: {config_file}")
 
     # Load configuration
-    # Load configuration
-    import yaml
-    from ...core.config import LabConfig
-    
-    # Check version
     with open(config_path, "r") as f:
         config_data = yaml.safe_load(f)
-    
+
     if config_data.get("version") == 2:
         config = LabConfig.load_from_file(config_path)
     else:
@@ -79,17 +74,9 @@ def run(
             env_file = compose_path / ".env"
             if not env_file.exists():
                 console.print("[yellow]⚠️  .env file not found. Attempting to generate...[/yellow]")
-                
-                # Try to generate from config
-                env_vars = {}
-                if isinstance(config, LabConfig) and hasattr(config, "env_vars"):
-                     # LabConfig doesn't have env_vars field in definition but init creates it in dict
-                     # We might need to access the raw dict or add it to LabConfig
-                     pass 
-                
-                # Fallback: Try to load from config file directly if model doesn't have it
+
+                # Try to load env_vars from raw config file
                 try:
-                    import yaml
                     with open(config_file, "r") as f:
                         raw_config = yaml.safe_load(f)
                     env_vars = raw_config.get("env_vars", {})
@@ -106,8 +93,11 @@ def run(
                     if env_template.exists():
                         import shutil
                         shutil.copy(env_template, env_file)
-                        console.print("[yellow]✓ Copied .env.template to .env (please configure secrets)[/yellow]")
-                
+                        console.print(
+                            "[yellow]✓ Copied .env.template to .env"
+                            " (please configure secrets)[/yellow]"
+                        )
+
                 progress.update(deploy_task, advance=5)
 
             # Deploy all services
@@ -185,7 +175,7 @@ def _deploy_compose_stack(
         cmd.extend(services)
 
     try:
-        result = subprocess.run(
+        subprocess.run(
             cmd, cwd=compose_path, capture_output=True, text=True, check=True
         )
         console.print(f"[dim]✓ Deployed {compose_file}[/dim]")
@@ -230,7 +220,8 @@ def _wait_for_services(config: Config, timeout: int) -> None:
                 if "monitoring" in enabled_services:
                     required_services.extend(["prometheus", "grafana"])
                 if "postgresql" in enabled_services:
-                    required_services.append("postgres") # Container name is usually postgres or postgresql
+                    # Container name is usually postgres or postgresql
+                    required_services.append("postgres")
                 if "vaultwarden" in enabled_services:
                     required_services.append("vaultwarden")
             else:
@@ -274,17 +265,15 @@ def _show_deployment_info(config: Config, compose_path: Path) -> None:
     for service, url in urls.items():
         console.print(f"  • {service.title()}: {url}")
 
-    console.print(f"\n[bold]📁 Management:[/bold]")
-    console.print(f"  • Check status: [cyan]labctl status[/cyan]")
-    console.print(f"  • View logs: [cyan]labctl logs[/cyan]")
-    console.print(f"  • Stop services: [cyan]labctl stop[/cyan]")
+    console.print("\n[bold]📁 Management:[/bold]")
+    console.print("  • Check status: [cyan]labctl status[/cyan]")
+    console.print("  • View logs: [cyan]labctl logs[/cyan]")
+    console.print("  • Stop services: [cyan]labctl stop[/cyan]")
 
-    console.print(f"\n[bold]📋 Docker Commands:[/bold]")
-    console.print(f"  • View containers: [cyan]docker ps[/cyan]")
+    console.print("\n[bold]📋 Docker Commands:[/bold]")
+    console.print("  • View containers: [cyan]docker ps[/cyan]")
     console.print(
         f"  • Follow logs: [cyan]docker compose -f {compose_path}/docker-compose.yml logs -f[/cyan]"
     )
 
-    console.print(
-        f"\n[dim]💡 Services may take a few minutes to fully initialize[/dim]"
-    )
+    console.print("\n[dim]💡 Services may take a few minutes to fully initialize[/dim]")

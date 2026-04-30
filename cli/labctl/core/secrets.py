@@ -7,7 +7,6 @@ as well as management of environment variable files.
 
 import base64
 import hashlib
-import os
 import re
 import secrets
 import string

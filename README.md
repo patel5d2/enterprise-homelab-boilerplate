@@ -9,7 +9,7 @@ A comprehensive, enterprise-grade home lab infrastructure management system with
 ## 🚀 Quick Start
 
 ```bash
-git clone https://github.com/you/enterprise-homelab-boilerplate
+git clone https://github.com/patel5d2/enterprise-homelab-boilerplate
 cd enterprise-homelab-boilerplate
 ./bootstrap.sh
 ```

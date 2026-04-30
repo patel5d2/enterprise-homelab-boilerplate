@@ -14,7 +14,6 @@ Exit code 0 = all healthy, 1 = at least one failure.
 
 from __future__ import annotations
 
-import os
 import shutil
 import subprocess
 import sys
@@ -153,8 +152,9 @@ def check_env_file(project_root: Path) -> tuple[bool, str, Optional[str]]:
 
     # Count non-comment, non-empty lines
     lines = [
-        l for l in env_path.read_text().splitlines()
-        if l.strip() and not l.strip().startswith("#")
+        line
+        for line in env_path.read_text().splitlines()
+        if line.strip() and not line.strip().startswith("#")
     ]
     return True, f".env found ({len(lines)} variable(s) set)", None
 
@@ -179,7 +179,7 @@ def check_env_required_vars(project_root: Path) -> tuple[bool, str, Optional[str
         return (
             False,
             f"{len(todo_vars)} variable(s) still need manual values: {', '.join(todo_vars)}",
-            f"Edit .env and fill in the # TODO entries, then re-run: labctl doctor",
+            "Edit .env and fill in the # TODO entries, then re-run: labctl doctor",
         )
     return True, "All .env variables have values set", None
 
@@ -276,7 +276,7 @@ def check_service_env_vars(project_root: Path) -> tuple[bool, str, Optional[str]
         return (
             False,
             f"Missing env vars for enabled services: {', '.join(missing)}",
-            f"Add these to .env:\n  " + "\n  ".join(f"{m.split(' (')[0]}=<value>" for m in missing),
+            "Add these to .env:\n  " + "\n  ".join(f"{m.split(' (')[0]}=<value>" for m in missing),
         )
     return True, "All required service env vars are set", None
 

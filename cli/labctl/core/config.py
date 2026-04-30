@@ -2,13 +2,12 @@
 Configuration management for Home Lab CLI
 """
 
-import json
 from enum import Enum
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Union
 
 import yaml
-from pydantic import BaseModel, Field, model_validator, validator
+from pydantic import BaseModel, Field, model_validator
 
 
 class CoreConfig(BaseModel):
