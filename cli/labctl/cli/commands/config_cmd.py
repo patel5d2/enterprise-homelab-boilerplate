@@ -40,9 +40,7 @@ def run(
         _display_config_info(config, config_path)
 
 
-def _show_config(
-    config_path: Path, config: Config, key: Optional[str], format: str
-) -> None:
+def _show_config(config_path: Path, config: Config, key: Optional[str], format: str) -> None:
     """Show configuration content"""
 
     if key:
@@ -72,9 +70,7 @@ def _show_config(
     else:
         syntax = Syntax(content, "text", line_numbers=True)
 
-    panel = Panel(
-        syntax, title=f"📋 Configuration: {config_path.name}", border_style="blue"
-    )
+    panel = Panel(syntax, title=f"📋 Configuration: {config_path.name}", border_style="blue")
 
     console.print(panel)
 

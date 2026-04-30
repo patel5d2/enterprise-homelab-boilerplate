@@ -39,9 +39,7 @@ def save_config_to_yaml(config_data: dict, config_path: Path) -> None:
                 processed_services[service_id] = service_config
             else:
                 # Convert to dict representation
-                processed_services[service_id] = (
-                    dict(service_config) if service_config else {}
-                )
+                processed_services[service_id] = dict(service_config) if service_config else {}
 
         config_to_save["services"] = processed_services
 
@@ -193,16 +191,15 @@ def validate_config_format(config_data: dict) -> bool:
 
     # Check version
     if config_data.get("version") != 2:
-        console.print(
-            f"[red]Unsupported config version: {config_data.get('version')}[/red]"
-        )
+        console.print(f"[red]Unsupported config version: {config_data.get('version')}[/red]")
         return False
 
     # Check profile
     valid_profiles = ["dev", "prod", "development", "production"]
     if config_data.get("profile") not in valid_profiles:
         console.print(
-            f"[red]Invalid profile: {config_data.get('profile')}. Must be one of {valid_profiles}[/red]"
+            f"[red]Invalid profile: {config_data.get('profile')}. "
+            f"Must be one of {valid_profiles}[/red]"
         )
         return False
 
@@ -221,14 +218,10 @@ def validate_config_format(config_data: dict) -> bool:
     # Check that enabled services have required fields
     for service_id, service_config in services.items():
         if not isinstance(service_config, dict):
-            console.print(
-                f"[red]Service {service_id} configuration must be a dictionary[/red]"
-            )
+            console.print(f"[red]Service {service_id} configuration must be a dictionary[/red]")
             return False
 
         if "enabled" not in service_config:
-            console.print(
-                f"[yellow]Warning: Service {service_id} missing 'enabled' field[/yellow]"
-            )
+            console.print(f"[yellow]Warning: Service {service_id} missing 'enabled' field[/yellow]")
 
     return True

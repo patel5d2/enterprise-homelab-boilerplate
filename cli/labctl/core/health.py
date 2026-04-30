@@ -98,8 +98,7 @@ class HealthChecker:
             url = f"https://vault.{self.config.core.domain}/v1/sys/health"
             response = requests.get(url, timeout=10, verify=False)
             return {
-                "healthy": response.status_code
-                in [200, 429],  # 429 is sealed but healthy
+                "healthy": response.status_code in [200, 429],  # 429 is sealed but healthy
                 "status_code": response.status_code,
                 "service": "vault",
             }

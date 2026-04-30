@@ -8,7 +8,6 @@ from typing import List, Optional
 
 from rich.console import Console
 
-from ...core.config import Config
 from ...core.exceptions import HomeLabError
 
 console = Console()

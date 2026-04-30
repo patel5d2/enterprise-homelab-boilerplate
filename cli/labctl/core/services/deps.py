@@ -37,9 +37,7 @@ class MissingDependencyError(DependencyError):
         self.service = service
         self.missing_deps = missing_deps
         deps_str = ", ".join(missing_deps)
-        super().__init__(
-            f"Service '{service}' requires missing dependencies: {deps_str}"
-        )
+        super().__init__(f"Service '{service}' requires missing dependencies: {deps_str}")
 
 
 class DependencyGraph:
@@ -243,15 +241,11 @@ class DependencyGraph:
             except CircularDependencyError:
                 raise
             # If no cycle found, there's an unknown issue
-            raise DependencyError(
-                f"Unable to resolve dependencies for: {', '.join(remaining)}"
-            )
+            raise DependencyError(f"Unable to resolve dependencies for: {', '.join(remaining)}")
 
         return result
 
-    def _detect_cycles_in_subset(
-        self, services: Set[str], subgraph: Dict[str, Set[str]]
-    ) -> None:
+    def _detect_cycles_in_subset(self, services: Set[str], subgraph: Dict[str, Set[str]]) -> None:
         """Detect cycles in a subset of services"""
         visited = set()
         rec_stack = set()
@@ -363,9 +357,9 @@ class DependencyGraph:
             # Update in_degree for remaining services
             for service in remaining:
                 # Recalculate dependencies that will still exist after this phase
-                updated_external_deps = self.get_dependencies(
-                    service
-                ) - removal_set | set(removable)
+                updated_external_deps = self.get_dependencies(service) - removal_set | set(
+                    removable
+                )
                 in_degree[service] = len(
                     updated_external_deps & set(self.schemas.keys()) - removal_set
                 )

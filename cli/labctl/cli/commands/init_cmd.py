@@ -33,7 +33,7 @@ def run(
     force: bool = False,
     profile: Optional[str] = None,
     non_interactive: bool = False,
-    service: Optional[str] = None,         # --service <id> — reconfigure one service
+    service: Optional[str] = None,  # --service <id> — reconfigure one service
 ) -> None:
     """Initialize or reconfigure the home lab configuration."""
 
@@ -97,7 +97,9 @@ def run(
             if service not in service_schemas:
                 known = ", ".join(sorted(service_schemas.keys()))
                 raise HomeLabError(f"Unknown service '{service}'. Known services: {known}")
-            console.print(f"\n[bold blue]⚙  Reconfiguring {service_schemas[service].name} only[/bold blue]")
+            console.print(
+                f"\n[bold blue]⚙  Reconfiguring {service_schemas[service].name} only[/bold blue]"
+            )
             svc_cfg, svc_env = orchestrator.run_single_service(
                 service_id=service,
                 existing_config=existing_config,
@@ -132,7 +134,7 @@ def run(
             _merge_env_file(env_path, env_vars)
             console.print(f"[green]✅ Secrets merged   → {env_path}[/green]")
         elif not env_path.exists():
-            console.print(f"[dim]ℹ  No secrets to write — .env unchanged[/dim]")
+            console.print("[dim]ℹ  No secrets to write — .env unchanged[/dim]")
 
     except Exception as exc:
         raise HomeLabError(f"Failed to save configuration: {exc}")
@@ -205,13 +207,14 @@ def _show_next_steps(config: dict) -> None:
 
     # Service URLs
     urls = {
-        s: f"https://{s}.{domain}"
-        for s in enabled
-        if s not in ("postgresql", "redis", "mongodb")
+        s: f"https://{s}.{domain}" for s in enabled if s not in ("postgresql", "redis", "mongodb")
     }
     if urls:
         console.print("\n[bold]🌐 Service URLs (after deploy):[/bold]")
         for svc, url in list(urls.items())[:6]:
             console.print(f"  • {svc}: {url}")
 
-    console.print(f"\n[dim]Profile: {config.get('profile', 'prod')} | Re-run: labctl init --service <id>[/dim]")
+    console.print(
+        f"\n[dim]Profile: {config.get('profile', 'prod')} "
+        "| Re-run: labctl init --service <id>[/dim]"
+    )

@@ -45,9 +45,7 @@ class DeploymentError(HomeLabError):
 class ServiceError(HomeLabError):
     """Service management errors"""
 
-    def __init__(
-        self, message: str, service: str = "", details: Optional[Dict[str, Any]] = None
-    ):
+    def __init__(self, message: str, service: str = "", details: Optional[Dict[str, Any]] = None):
         details = details or {}
         if service:
             details["service"] = service
@@ -64,9 +62,7 @@ class NetworkError(HomeLabError):
 class HealthCheckError(HomeLabError):
     """Health check failures"""
 
-    def __init__(
-        self, message: str, service: str = "", details: Optional[Dict[str, Any]] = None
-    ):
+    def __init__(self, message: str, service: str = "", details: Optional[Dict[str, Any]] = None):
         details = details or {}
         if service:
             details["service"] = service

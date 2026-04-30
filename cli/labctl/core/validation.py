@@ -115,9 +115,7 @@ class ConfigurationValidator:
                 self._validate_service(service_id, service_config)
             except Exception as e:
                 self.errors.append(
-                    ValidationError(
-                        f"Failed to validate {service_id}: {e}", service=service_id
-                    )
+                    ValidationError(f"Failed to validate {service_id}: {e}", service=service_id)
                 )
 
     def _validate_service(self, service_id: str, service_config: BaseServiceConfig):
@@ -128,8 +126,7 @@ class ConfigurationValidator:
             if not self._is_valid_port(service_config.port):
                 self.errors.append(
                     ValidationError(
-                        f"Invalid port {service_config.port}. "
-                        "Must be between 1 and 65535",
+                        f"Invalid port {service_config.port}. " "Must be between 1 and 65535",
                         field="port",
                         service=service_id,
                     )
@@ -301,8 +298,7 @@ class ConfigurationValidator:
         if hasattr(config, "dns_port") and config.dns_port and config.dns_port != 53:
             self.warnings.append(
                 ValidationWarning(
-                    f"Using non-standard DNS port {config.dns_port}. "
-                    "Standard DNS port is 53",
+                    f"Using non-standard DNS port {config.dns_port}. " "Standard DNS port is 53",
                     field="dns_port",
                     service="pihole",
                 )
@@ -316,8 +312,7 @@ class ConfigurationValidator:
             ):
                 self.errors.append(
                     ValidationError(
-                        f"Invalid SMTP host: '{config.smtp_host}'. "
-                        "Must be domain or IP address",
+                        f"Invalid SMTP host: '{config.smtp_host}'. " "Must be domain or IP address",
                         field="smtp_host",
                         service="vaultwarden",
                     )
@@ -409,8 +404,7 @@ class ConfigurationValidator:
             if len(service_list) > 1:
                 self.errors.append(
                     ValidationError(
-                        f"Port {port} conflict: used by services "
-                        f"{', '.join(service_list)}"
+                        f"Port {port} conflict: used by services " f"{', '.join(service_list)}"
                     )
                 )
 
@@ -463,8 +457,7 @@ class ConfigurationValidator:
             if result.returncode != 0:
                 self.warnings.append(
                     ValidationWarning(
-                        "Docker not found in PATH. "
-                        "Ensure Docker is installed and running."
+                        "Docker not found in PATH. " "Ensure Docker is installed and running."
                     )
                 )
         except Exception:
@@ -489,14 +482,10 @@ class ConfigurationValidator:
                     path.rmdir()  # Clean up test directory
                 except PermissionError:
                     self.warnings.append(
-                        ValidationWarning(
-                            f"Cannot create directory {path}. Check permissions."
-                        )
+                        ValidationWarning(f"Cannot create directory {path}. Check permissions.")
                     )
                 except Exception as e:
-                    self.warnings.append(
-                        ValidationWarning(f"Storage path issue for {path}: {e}")
-                    )
+                    self.warnings.append(ValidationWarning(f"Storage path issue for {path}: {e}"))
 
     # Utility validation methods
     def _is_valid_domain(self, domain: str) -> bool:
@@ -586,9 +575,7 @@ def validate_configuration(
     return errors, warnings
 
 
-def display_validation_results(
-    errors: List[ValidationError], warnings: List[ValidationWarning]
-):
+def display_validation_results(errors: List[ValidationError], warnings: List[ValidationWarning]):
     """Display validation results in a formatted table"""
 
     if not errors and not warnings:
@@ -632,9 +619,7 @@ def display_validation_results(
         warning_table.add_column("Message", style="white")
 
         for warning in warnings:
-            warning_table.add_row(
-                warning.service or "-", warning.field or "-", warning.message
-            )
+            warning_table.add_row(warning.service or "-", warning.field or "-", warning.message)
         console.print(warning_table)
 
     # Display recommendation
@@ -680,18 +665,14 @@ def run_preflight_checks(config: LabConfig) -> bool:
     display_validation_results(errors, warnings)
 
     if errors:
-        console.print(
-            f"\n[red]❌ Preflight checks failed with {len(errors)} error(s)[/red]"
-        )
+        console.print(f"\n[red]❌ Preflight checks failed with {len(errors)} error(s)[/red]")
         return False
     elif warnings:
         console.print(
-            f"\n[yellow]⚠️  Preflight checks completed with {len(warnings)} "
-            "warning(s)[/yellow]"
+            f"\n[yellow]⚠️  Preflight checks completed with {len(warnings)} " "warning(s)[/yellow]"
         )
         console.print(
-            "[yellow]Review warnings before proceeding to "
-            "production deployment.[/yellow]"
+            "[yellow]Review warnings before proceeding to " "production deployment.[/yellow]"
         )
     else:
         console.print("\n[green]✅ All preflight checks passed![/green]")

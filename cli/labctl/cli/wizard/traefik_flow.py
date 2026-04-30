@@ -29,7 +29,10 @@ def validate_domain(domain: str) -> bool:
     Returns:
         True if valid domain format
     """
-    pattern = r"^(?:[a-zA-Z0-9](?:[a-zA-Z0-9\-]{0,61}[a-zA-Z0-9])?\.)*[a-zA-Z0-9](?:[a-zA-Z0-9\-]{0,61}[a-zA-Z0-9])?$"
+    pattern = (
+        r"^(?:[a-zA-Z0-9](?:[a-zA-Z0-9\-]{0,61}[a-zA-Z0-9])?\.)*"
+        r"[a-zA-Z0-9](?:[a-zA-Z0-9\-]{0,61}[a-zA-Z0-9])?$"
+    )
     return bool(re.match(pattern, domain)) and len(domain) <= 253
 
 
@@ -81,9 +84,7 @@ def configure_traefik_domain() -> str:
         if validate_domain(domain):
             return domain
         else:
-            console.print(
-                "[red]Invalid domain format. Please enter a valid domain.[/red]"
-            )
+            console.print("[red]Invalid domain format. Please enter a valid domain.[/red]")
 
 
 def configure_cloudflare_credentials() -> Tuple[str, Dict[str, str]]:
@@ -94,14 +95,10 @@ def configure_cloudflare_credentials() -> Tuple[str, Dict[str, str]]:
         Tuple of (provider_type, credentials_dict)
     """
     console.print("\n[bold blue]☁️ Cloudflare DNS Challenge[/bold blue]")
-    console.print(
-        "Configure Cloudflare for automatic DNS challenge and wildcard certificates."
-    )
+    console.print("Configure Cloudflare for automatic DNS challenge and wildcard certificates.")
 
     console.print("\n[bold]Authentication Methods:[/bold]")
-    console.print(
-        "1. [cyan]API Token[/cyan] (Recommended) - Scoped permissions, more secure"
-    )
+    console.print("1. [cyan]API Token[/cyan] (Recommended) - Scoped permissions, more secure")
     console.print("2. [cyan]Global API Key[/cyan] - Full account access, less secure")
 
     choice = Prompt.ask(
@@ -125,9 +122,7 @@ def configure_api_token() -> Tuple[str, Dict[str, str]]:
         Tuple of (provider_type, credentials_dict)
     """
     console.print("\n[bold]API Token Configuration[/bold]")
-    console.print(
-        "[dim]Create a token at: https://dash.cloudflare.com/profile/api-tokens[/dim]"
-    )
+    console.print("[dim]Create a token at: https://dash.cloudflare.com/profile/api-tokens[/dim]")
     console.print("[dim]Required permissions: Zone:Zone:Read, Zone:DNS:Edit[/dim]")
 
     while True:
@@ -137,9 +132,7 @@ def configure_api_token() -> Tuple[str, Dict[str, str]]:
             console.print("[green]✓ Token format looks valid[/green]")
             break
         else:
-            console.print(
-                "[red]Invalid token format. Tokens should be 40 characters.[/red]"
-            )
+            console.print("[red]Invalid token format. Tokens should be 40 characters.[/red]")
             if not Confirm.ask("Try again?", default=True, console=console):
                 break
 
@@ -154,12 +147,8 @@ def configure_global_key() -> Tuple[str, Dict[str, str]]:
         Tuple of (provider_type, credentials_dict)
     """
     console.print("\n[bold]Global API Key Configuration[/bold]")
-    console.print(
-        "[yellow]Warning: Global API Key provides full account access[/yellow]"
-    )
-    console.print(
-        "[dim]Find your key at: https://dash.cloudflare.com/profile/api-tokens[/dim]"
-    )
+    console.print("[yellow]Warning: Global API Key provides full account access[/yellow]")
+    console.print("[dim]Find your key at: https://dash.cloudflare.com/profile/api-tokens[/dim]")
 
     while True:
         email = Prompt.ask("Cloudflare account email", console=console)
@@ -204,9 +193,7 @@ def configure_wildcard_certificates() -> bool:
     """
     console.print("\n[bold blue]🌟 Wildcard Certificates[/bold blue]")
     console.print("Wildcard certificates secure *.yourdomain.com automatically.")
-    console.print(
-        "[dim]Requires DNS challenge (already configured with Cloudflare)[/dim]"
-    )
+    console.print("[dim]Requires DNS challenge (already configured with Cloudflare)[/dim]")
 
     return Confirm.ask("Enable wildcard certificates?", default=True, console=console)
 
@@ -261,9 +248,7 @@ def configure_advanced_options() -> Dict[str, Any]:
 
     config = {}
 
-    if Confirm.ask(
-        "Enable HSTS (HTTP Strict Transport Security)?", default=True, console=console
-    ):
+    if Confirm.ask("Enable HSTS (HTTP Strict Transport Security)?", default=True, console=console):
         config["hsts_enabled"] = True
 
     if Confirm.ask("Force HTTPS redirects?", default=True, console=console):
@@ -366,9 +351,7 @@ def show_traefik_summary(config: Dict[str, Any], env_vars: Dict[str, str]) -> No
     table.add_row("Domain", config.get("domain", ""))
     table.add_row("ACME Environment", config.get("acme_environment", ""))
     table.add_row("DNS Provider", f"Cloudflare ({config.get('dns_provider_type', '')})")
-    table.add_row(
-        "Wildcard Certificates", "✓" if config.get("wildcard_enabled") else "✗"
-    )
+    table.add_row("Wildcard Certificates", "✓" if config.get("wildcard_enabled") else "✗")
     table.add_row("Dashboard", "✓" if config.get("dashboard_enabled") else "✗")
     table.add_row("HSTS", "✓" if config.get("hsts_enabled") else "✗")
     table.add_row("HTTPS Redirect", "✓" if config.get("https_redirect") else "✗")
@@ -378,9 +361,7 @@ def show_traefik_summary(config: Dict[str, Any], env_vars: Dict[str, str]) -> No
 
     # Show environment variables (redacted)
     if env_vars:
-        console.print(
-            f"\n[bold]Environment Variables ({len(env_vars)} secrets):[/bold]"
-        )
+        console.print(f"\n[bold]Environment Variables ({len(env_vars)} secrets):[/bold]")
         for key in env_vars.keys():
             console.print(f"  • {key}: [dim]●●●●●●●●[/dim]")
 
@@ -412,9 +393,7 @@ def show_dns_setup_instructions(domain: str) -> None:
     console.print(f"  • https://{domain} - Your main site")
     console.print("  • Certificate validity and wildcard support")
 
-    console.print(
-        "\n[dim]💡 Tip: Use 'dig' or 'nslookup' to verify DNS propagation[/dim]"
-    )
+    console.print("\n[dim]💡 Tip: Use 'dig' or 'nslookup' to verify DNS propagation[/dim]")
 
 
 if __name__ == "__main__":

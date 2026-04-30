@@ -41,9 +41,7 @@ class ComposeGenerator:
                 if schemas_path.exists():
                     self.schemas = load_service_schemas(str(schemas_path))
             except Exception as e:
-                console.print(
-                    f"[yellow]Warning: Could not load service schemas: {e}[/yellow]"
-                )
+                console.print(f"[yellow]Warning: Could not load service schemas: {e}[/yellow]")
 
     def _secure_traefik_labels(
         self, name: str, subdomain: str, port: Optional[int] = None
@@ -58,14 +56,10 @@ class ComposeGenerator:
             f"traefik.http.routers.{name}.middlewares=secure-headers@docker",
         ]
         if port is not None:
-            labels.append(
-                f"traefik.http.services.{name}.loadbalancer.server.port={port}"
-            )
+            labels.append(f"traefik.http.services.{name}.loadbalancer.server.port={port}")
         return labels
 
-    def _merge_environment_variables(
-        self, service_name: str, default_env: List[str]
-    ) -> List[str]:
+    def _merge_environment_variables(self, service_name: str, default_env: List[str]) -> List[str]:
         """Merge default environment variables with custom ones for a service"""
         # Convert default env list to dict for easier merging
         env_dict = {}
@@ -79,9 +73,9 @@ class ComposeGenerator:
 
         # Add custom environment variables (they override defaults)
         custom_vars = {}
-        if hasattr(
-            self.config, "custom_env"
-        ) and self.config.custom_env.has_custom_vars(service_name):
+        if hasattr(self.config, "custom_env") and self.config.custom_env.has_custom_vars(
+            service_name
+        ):
             # Config object case
             custom_vars = self.config.custom_env.get_service_vars(service_name)
         elif isinstance(self.config, dict) and "custom_env" in self.config:
@@ -109,11 +103,7 @@ class ComposeGenerator:
             return self.config.get_enabled_services()
         elif isinstance(self.config, dict) and "services" in self.config:
             # New dict format
-            return {
-                k: v
-                for k, v in self.config["services"].items()
-                if v.get("enabled", False)
-            }
+            return {k: v for k, v in self.config["services"].items() if v.get("enabled", False)}
         elif hasattr(self.config, "proxy") and hasattr(self.config, "databases"):
             # Legacy Config object format
             enabled = {}
@@ -144,9 +134,7 @@ class ComposeGenerator:
             return self._build_service_from_schema(service_id, service_config, schema)
         except Exception as e:
             console.print(f"[red]Error generating service {service_id}: {e}[/red]")
-            console.print(
-                f"[yellow]Falling back to legacy generation for {service_id}[/yellow]"
-            )
+            console.print(f"[yellow]Falling back to legacy generation for {service_id}[/yellow]")
             return self._generate_service_legacy(service_id, service_config)
 
     def _build_service_from_schema(
@@ -154,9 +142,7 @@ class ComposeGenerator:
     ) -> Dict[str, Any]:
         """Build service configuration from schema (with error handling)"""
         if not schema.compose.image:
-            raise ValueError(
-                f"Service {service_id} schema missing required 'image' field"
-            )
+            raise ValueError(f"Service {service_id} schema missing required 'image' field")
 
         compose_service = {
             "image": schema.compose.image,
@@ -185,16 +171,12 @@ class ComposeGenerator:
                 if ports:
                     compose_service["ports"] = ports
         except Exception as e:
-            console.print(
-                f"[yellow]Warning: Failed to build ports for {service_id}: {e}[/yellow]"
-            )
+            console.print(f"[yellow]Warning: Failed to build ports for {service_id}: {e}[/yellow]")
 
         try:
             # Add volumes
             if schema.compose.volumes:
-                volumes = self._build_volumes_from_schema(
-                    service_id, service_config, schema
-                )
+                volumes = self._build_volumes_from_schema(service_id, service_config, schema)
                 if volumes:
                     compose_service["volumes"] = volumes
                     self._register_volumes(service_id, volumes)
@@ -206,15 +188,11 @@ class ComposeGenerator:
         try:
             # Add labels (especially Traefik)
             if schema.compose.labels:
-                labels = self._build_labels_from_schema(
-                    service_id, service_config, schema
-                )
+                labels = self._build_labels_from_schema(service_id, service_config, schema)
                 if labels:
                     compose_service["labels"] = labels
         except Exception as e:
-            console.print(
-                f"[yellow]Warning: Failed to build labels for {service_id}: {e}[/yellow]"
-            )
+            console.print(f"[yellow]Warning: Failed to build labels for {service_id}: {e}[/yellow]")
 
         try:
             # Add dependencies
@@ -265,7 +243,8 @@ class ComposeGenerator:
                 compose_service["privileged"] = schema.compose.privileged
         except Exception as e:
             console.print(
-                f"[yellow]Warning: Failed to add additional properties for {service_id}: {e}[/yellow]"
+                f"[yellow]Warning: Failed to add additional properties "
+                f"for {service_id}: {e}[/yellow]"
             )
 
         return compose_service
@@ -274,9 +253,7 @@ class ComposeGenerator:
         self, service_id: str, service_config: Any
     ) -> Optional[Dict[str, Any]]:
         """Fallback generation for services without schemas"""
-        console.print(
-            f"[yellow]Warning: Using legacy generation for {service_id}[/yellow]"
-        )
+        console.print(f"[yellow]Warning: Using legacy generation for {service_id}[/yellow]")
 
         # Basic service structure
         compose_service = {
@@ -297,9 +274,7 @@ class ComposeGenerator:
             "pihole": "pihole/pihole:latest",
         }
 
-        compose_service["image"] = image_mappings.get(
-            service_id, f"{service_id}:latest"
-        )
+        compose_service["image"] = image_mappings.get(service_id, f"{service_id}:latest")
 
         return compose_service
 
@@ -327,9 +302,7 @@ class ComposeGenerator:
                             and env_source.from_field.upper() in self.config.env_vars
                         ):
                             env_value = f"${{{env_source.from_field.upper()}}}"
-                        elif (
-                            isinstance(self.config, dict) and "env_vars" in self.config
-                        ):
+                        elif isinstance(self.config, dict) and "env_vars" in self.config:
                             if env_source.from_field.upper() in self.config["env_vars"]:
                                 env_value = f"${{{env_source.from_field.upper()}}}"
 
@@ -375,9 +348,7 @@ class ComposeGenerator:
 
         return environment
 
-    def _build_ports_from_schema(
-        self, service_config: Any, schema: ServiceSchema
-    ) -> List[str]:
+    def _build_ports_from_schema(self, service_config: Any, schema: ServiceSchema) -> List[str]:
         """Build port mappings from schema"""
         ports = []
 
@@ -395,9 +366,7 @@ class ComposeGenerator:
                     elif isinstance(service_config, dict):
                         value = service_config.get(field_name)
                         if value is not None:
-                            port_spec = port_spec.replace(
-                                f"${{{field_name}}}", str(value)
-                            )
+                            port_spec = port_spec.replace(f"${{{field_name}}}", str(value))
 
             ports.append(port_spec)
 
@@ -412,9 +381,7 @@ class ComposeGenerator:
         for volume_spec in schema.compose.volumes:
             # Handle named volumes (service_name_data:/path)
             if "${SERVICE_DATA_DIR}" in volume_spec:
-                volume_spec = volume_spec.replace(
-                    "${SERVICE_DATA_DIR}", f"{service_id}_data"
-                )
+                volume_spec = volume_spec.replace("${SERVICE_DATA_DIR}", f"{service_id}_data")
 
             volumes.append(volume_spec)
 
@@ -429,7 +396,7 @@ class ComposeGenerator:
         for label_spec in schema.compose.labels:
             # Handle template substitution using the centralized method
             label = self._substitute_template(label_spec, service_id, service_config)
-            
+
             # Handle legacy manual substitutions (if any remain not covered by _substitute_template)
             if hasattr(service_config, "domain") and service_config.domain:
                 if "${SERVICE_DOMAIN}" in label:
@@ -439,9 +406,7 @@ class ComposeGenerator:
 
         return labels
 
-    def _build_depends_on_from_schema(
-        self, schema: ServiceSchema
-    ) -> Dict[str, Dict[str, str]]:
+    def _build_depends_on_from_schema(self, schema: ServiceSchema) -> Dict[str, Dict[str, str]]:
         """Build depends_on configuration with health checks"""
         depends_on = {}
 
@@ -465,9 +430,7 @@ class ComposeGenerator:
 
         return healthcheck
 
-    def _substitute_template(
-        self, template: str, service_id: str, service_config: Any
-    ) -> str:
+    def _substitute_template(self, template: str, service_id: str, service_config: Any) -> str:
         """Substitute template variables with actual values"""
         import re
 
@@ -492,9 +455,7 @@ class ComposeGenerator:
         env_matches = re.findall(env_pattern, result)
         for env_var in env_matches:
             if hasattr(self.config, "env_vars") and env_var in self.config.env_vars:
-                result = result.replace(
-                    f"${{ENV:{env_var}}}", str(self.config.env_vars[env_var])
-                )
+                result = result.replace(f"${{ENV:{env_var}}}", str(self.config.env_vars[env_var]))
             elif (
                 isinstance(self.config, dict)
                 and "env_vars" in self.config
@@ -507,6 +468,7 @@ class ComposeGenerator:
         # Handle generate:htpasswd
         if "${generate:htpasswd" in result:
             import re
+
             # Pattern: ${generate:htpasswd:user_field:pass_field}
             pattern = r"\$\{generate:htpasswd:(\w+):(\w+)\}"
             matches = re.findall(pattern, result)
@@ -524,23 +486,25 @@ class ComposeGenerator:
 
                 # For password/hash, check if we have a pre-calculated hash
                 hash_val = None
-                if hasattr(
-                    service_config, "dashboard_auth_hash"
-                ) and service_config.dashboard_auth_hash:
+                if (
+                    hasattr(service_config, "dashboard_auth_hash")
+                    and service_config.dashboard_auth_hash
+                ):
                     hash_val = service_config.dashboard_auth_hash
-                
+
                 # If no hash, use a placeholder or environment variable
                 if not hash_val:
                     replacement = "${TRAEFIK_DASHBOARD_USERS}"
                 else:
                     replacement = f"{user_val}:{hash_val}"
-                
+
                 target_str = f"${{generate:htpasswd:{user_field}:{pass_field}}}"
                 result = result.replace(target_str, replacement)
 
         # Handle from_field:field_name
         if "${from_field:" in result:
             import re
+
             pattern = r"\$\{from_field:(\w+)\}"
             matches = re.findall(pattern, result)
             for field_name in matches:
@@ -549,7 +513,7 @@ class ComposeGenerator:
                     value = service_config.get(field_name)
                 elif hasattr(service_config, field_name):
                     value = getattr(service_config, field_name)
-                
+
                 if value is not None:
                     target_str = f"${{from_field:{field_name}}}"
                     result = result.replace(target_str, str(value))
@@ -565,10 +529,7 @@ class ComposeGenerator:
         if condition.startswith("has_"):
             field_name = condition[4:]  # Remove 'has_' prefix
             if isinstance(service_config, dict):
-                return (
-                    field_name in service_config
-                    and service_config[field_name] is not None
-                )
+                return field_name in service_config and service_config[field_name] is not None
             elif hasattr(service_config, field_name):
                 return getattr(service_config, field_name) is not None
 
@@ -643,9 +604,7 @@ class ComposeGenerator:
                 )
             else:
                 # Use legacy generation
-                compose_service = self._generate_service_legacy(
-                    service_id, service_config
-                )
+                compose_service = self._generate_service_legacy(service_id, service_config)
 
             if compose_service:
                 self.services[service_id] = compose_service
@@ -675,9 +634,7 @@ class ComposeGenerator:
             # Write header comment
             f.write("# Docker Compose configuration for Home Lab\n")
             f.write("# Generated by labctl - do not edit manually\n\n")
-            yaml.dump(
-                compose_config, f, default_flow_style=False, indent=2, sort_keys=False
-            )
+            yaml.dump(compose_config, f, default_flow_style=False, indent=2, sort_keys=False)
 
     def save_env_template(self, file_path: Path) -> None:
         """Save environment template file"""
@@ -749,9 +706,7 @@ class ComposeGenerator:
                 if isinstance(port, str) and ":" in port:
                     host_port = port.split(":")[0]
                     if host_port.isdigit() and int(host_port) < 1024:
-                        warnings.append(
-                            f"Service '{service_id}' uses privileged port {host_port}"
-                        )
+                        warnings.append(f"Service '{service_id}' uses privileged port {host_port}")
 
         # Check for missing networks
         networks = compose_config.get("networks", {})

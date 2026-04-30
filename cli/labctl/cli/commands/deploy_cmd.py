@@ -85,6 +85,7 @@ def run(
 
                 if env_vars:
                     from ...core.secrets import load_or_create_env
+
                     load_or_create_env(str(env_file), env_vars)
                     console.print("[green]✓ Generated .env file from configuration[/green]")
                 else:
@@ -92,6 +93,7 @@ def run(
                     env_template = compose_path / ".env.template"
                     if env_template.exists():
                         import shutil
+
                         shutil.copy(env_template, env_file)
                         console.print(
                             "[yellow]✓ Copied .env.template to .env"
@@ -111,7 +113,7 @@ def run(
                 _wait_for_services(config, timeout)
                 progress.update(deploy_task, advance=5)
 
-        console.print(f"\n[green]✅ Deployment completed successfully![/green]")
+        console.print("\n[green]✅ Deployment completed successfully![/green]")
         _show_deployment_info(config, compose_path)
 
     except Exception as e:
@@ -151,9 +153,7 @@ def _create_networks() -> None:
                 console.print(f"[dim]✓ Network already exists: {network}[/dim]")
 
         except subprocess.CalledProcessError as e:
-            console.print(
-                f"[yellow]Warning: Failed to create network {network}: {e}[/yellow]"
-            )
+            console.print(f"[yellow]Warning: Failed to create network {network}: {e}[/yellow]")
 
 
 def _deploy_compose_stack(
@@ -175,9 +175,7 @@ def _deploy_compose_stack(
         cmd.extend(services)
 
     try:
-        subprocess.run(
-            cmd, cwd=compose_path, capture_output=True, text=True, check=True
-        )
+        subprocess.run(cmd, cwd=compose_path, capture_output=True, text=True, check=True)
         console.print(f"[dim]✓ Deployed {compose_file}[/dim]")
 
     except subprocess.CalledProcessError as e:
@@ -211,7 +209,7 @@ def _wait_for_services(config: Config, timeout: int) -> None:
 
             # Check if key services are running
             required_services = ["traefik"]
-            
+
             if isinstance(config, LabConfig):
                 # V2 Config
                 enabled_services = config.get_enabled_services()
@@ -251,9 +249,7 @@ def _wait_for_services(config: Config, timeout: int) -> None:
         except Exception:
             time.sleep(10)
 
-    console.print(
-        f"[yellow]⚠️ Some services may still be starting after {timeout}s[/yellow]"
-    )
+    console.print(f"[yellow]⚠️ Some services may still be starting after {timeout}s[/yellow]")
 
 
 def _show_deployment_info(config: Config, compose_path: Path) -> None:

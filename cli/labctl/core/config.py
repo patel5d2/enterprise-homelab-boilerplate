@@ -4,7 +4,7 @@ Configuration management for Home Lab CLI
 
 from enum import Enum
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Union
+from typing import Any, Dict, List, Optional
 
 import yaml
 from pydantic import BaseModel, Field, model_validator
@@ -22,12 +22,8 @@ class ReverseProxyConfig(BaseModel):
     """Reverse proxy configuration"""
 
     provider: str = Field(default="traefik", description="Reverse proxy provider")
-    ssl_provider: str = Field(
-        default="letsencrypt", description="SSL certificate provider"
-    )
+    ssl_provider: str = Field(default="letsencrypt", description="SSL certificate provider")
     staging: bool = Field(default=False, description="Use Let's Encrypt staging")
-
-
 
 
 class GitLabConfig(BaseModel):
@@ -43,23 +39,15 @@ class SecurityConfig(BaseModel):
     """Security configuration"""
 
     enabled: bool = Field(default=True, description="Enable security features")
-    vulnerability_scanning: bool = Field(
-        default=True, description="Enable vulnerability scanning"
-    )
-    compliance_reporting: bool = Field(
-        default=True, description="Enable compliance reporting"
-    )
-
-
+    vulnerability_scanning: bool = Field(default=True, description="Enable vulnerability scanning")
+    compliance_reporting: bool = Field(default=True, description="Enable compliance reporting")
 
 
 class NetworkingConfig(BaseModel):
     """Networking services configuration"""
 
     cloudflared: bool = Field(default=False, description="Enable Cloudflared tunnel")
-    headscale: bool = Field(
-        default=False, description="Enable Headscale (Tailscale controller)"
-    )
+    headscale: bool = Field(default=False, description="Enable Headscale (Tailscale controller)")
     pihole: bool = Field(default=False, description="Enable Pi-hole DNS")
 
 
@@ -83,18 +71,14 @@ class BackupConfig(BaseModel):
 class PasswordManagerConfig(BaseModel):
     """Password manager configuration"""
 
-    vaultwarden: bool = Field(
-        default=False, description="Enable Vaultwarden (Bitwarden)"
-    )
+    vaultwarden: bool = Field(default=False, description="Enable Vaultwarden (Bitwarden)")
 
 
 class DashboardConfig(BaseModel):
     """Dashboard and monitoring services"""
 
     glance: bool = Field(default=False, description="Enable Glance dashboard")
-    uptime_kuma: bool = Field(
-        default=False, description="Enable Uptime Kuma monitoring"
-    )
+    uptime_kuma: bool = Field(default=False, description="Enable Uptime Kuma monitoring")
 
 
 class DocumentationConfig(BaseModel):
@@ -120,9 +104,7 @@ class ProxyConfig(BaseModel):
     """Proxy services configuration"""
 
     traefik: bool = Field(default=True, description="Enable Traefik")
-    nginx_proxy_manager: bool = Field(
-        default=False, description="Enable Nginx Proxy Manager"
-    )
+    nginx_proxy_manager: bool = Field(default=False, description="Enable Nginx Proxy Manager")
     caddy: bool = Field(default=False, description="Enable Caddy")
 
 
@@ -143,9 +125,7 @@ class BaseServiceConfig(BaseModel):
     custom_env: Dict[str, str] = Field(
         default_factory=dict, description="Custom environment variables"
     )
-    dependencies: List[str] = Field(
-        default_factory=list, description="Service dependencies"
-    )
+    dependencies: List[str] = Field(default_factory=list, description="Service dependencies")
     healthcheck_enabled: bool = Field(default=True, description="Enable health checks")
     profile_overrides: Dict[str, Any] = Field(
         default_factory=dict, description="Profile-specific overrides"
@@ -161,24 +141,16 @@ class TraefikConfig(BaseServiceConfig):
     acme_environment: str = Field(
         default="production", description="ACME environment (staging/production)"
     )
-    dns_provider: str = Field(
-        default="cloudflare", description="DNS provider for challenges"
-    )
+    dns_provider: str = Field(default="cloudflare", description="DNS provider for challenges")
     dns_provider_type: str = Field(
         default="token", description="DNS provider auth type (token/global_key)"
     )
-    wildcard_enabled: bool = Field(
-        default=True, description="Enable wildcard certificates"
-    )
-    dashboard_enabled: bool = Field(
-        default=True, description="Enable Traefik dashboard"
-    )
+    wildcard_enabled: bool = Field(default=True, description="Enable wildcard certificates")
+    dashboard_enabled: bool = Field(default=True, description="Enable Traefik dashboard")
     dashboard_username: str = Field(default="admin", description="Dashboard username")
     dashboard_password: Optional[str] = Field(default=None, description="Dashboard password")
     dashboard_subdomain: str = Field(default="traefik", description="Dashboard subdomain")
-    dashboard_auth_hash: Optional[str] = Field(
-        default=None, description="Dashboard auth hash"
-    )
+    dashboard_auth_hash: Optional[str] = Field(default=None, description="Dashboard auth hash")
     hsts_enabled: bool = Field(default=True, description="Enable HSTS headers")
     https_redirect: bool = Field(default=True, description="Force HTTPS redirects")
     ipv6_enabled: bool = Field(default=False, description="Enable IPv6 support")
@@ -189,17 +161,11 @@ class PostgresConfig(BaseServiceConfig):
 
     port: int = Field(default=5432, description="PostgreSQL port", ge=1, le=65535)
     superuser: str = Field(default="postgres", description="Superuser username")
-    databases: List[str] = Field(
-        default_factory=list, description="Additional databases to create"
-    )
-    max_connections: int = Field(
-        default=100, description="Maximum connections", ge=10, le=1000
-    )
+    databases: List[str] = Field(default_factory=list, description="Additional databases to create")
+    max_connections: int = Field(default=100, description="Maximum connections", ge=10, le=1000)
     shared_buffers: str = Field(default="128MB", description="Shared buffers setting")
     backup_enabled: bool = Field(default=True, description="Enable automated backups")
-    backup_schedule: str = Field(
-        default="0 2 * * *", description="Backup cron schedule"
-    )
+    backup_schedule: str = Field(default="0 2 * * *", description="Backup cron schedule")
 
 
 class RedisConfig(BaseServiceConfig):
@@ -212,29 +178,21 @@ class RedisConfig(BaseServiceConfig):
         pattern=r"^(rdb|aof|both)$",
     )
     maxmemory: Optional[str] = Field(default=None, description="Maximum memory limit")
-    maxmemory_policy: str = Field(
-        default="allkeys-lru", description="Memory eviction policy"
-    )
+    maxmemory_policy: str = Field(default="allkeys-lru", description="Memory eviction policy")
     save_interval: str = Field(default="900 1", description="RDB save interval")
 
 
 class MonitoringConfig(BaseServiceConfig):
     """Monitoring stack configuration (Prometheus + Grafana)"""
 
-    prometheus_retention: str = Field(
-        default="30d", description="Prometheus data retention"
-    )
+    prometheus_retention: str = Field(default="30d", description="Prometheus data retention")
     external_port: int = Field(
         default=9090, description="External port for Prometheus", ge=1, le=65535
     )
     grafana_port: int = Field(default=3000, description="Grafana port", ge=1, le=65535)
-    grafana_admin_user: str = Field(
-        default="admin", description="Grafana admin username"
-    )
+    grafana_admin_user: str = Field(default="admin", description="Grafana admin username")
     alerting_enabled: bool = Field(default=True, description="Enable alerting rules")
-    provisioning_enabled: bool = Field(
-        default=True, description="Enable dashboards provisioning"
-    )
+    provisioning_enabled: bool = Field(default=True, description="Enable dashboards provisioning")
 
 
 class PiholeConfig(BaseServiceConfig):
@@ -244,47 +202,33 @@ class PiholeConfig(BaseServiceConfig):
         default_factory=lambda: ["8.8.8.8", "8.8.4.4"],
         description="Upstream DNS servers",
     )
-    web_port: int = Field(
-        default=8080, description="Web interface port", ge=1, le=65535
-    )
+    web_port: int = Field(default=8080, description="Web interface port", ge=1, le=65535)
     dns_port: int = Field(default=53, description="DNS port", ge=1, le=65535)
     dhcp_enabled: bool = Field(default=False, description="Enable DHCP server")
     server_ip: Optional[str] = Field(default=None, description="Server IP address")
-    blocklists: List[str] = Field(
-        default_factory=list, description="Additional blocklists"
-    )
-    whitelist: List[str] = Field(
-        default_factory=list, description="Whitelisted domains"
-    )
+    blocklists: List[str] = Field(default_factory=list, description="Additional blocklists")
+    whitelist: List[str] = Field(default_factory=list, description="Whitelisted domains")
 
 
 class HeadscaleConfig(BaseServiceConfig):
     """Headscale VPN coordination server configuration"""
 
-    listen_addr: str = Field(
-        default="0.0.0.0:8080", description="Listen address and port"
-    )
-    base_domain: Optional[str] = Field(
-        default=None, description="Base domain for Magic DNS"
-    )
+    listen_addr: str = Field(default="0.0.0.0:8080", description="Listen address and port")
+    base_domain: Optional[str] = Field(default=None, description="Base domain for Magic DNS")
     derp_enabled: bool = Field(default=True, description="Enable built-in DERP server")
     log_level: str = Field(
         default="info",
         description="Log level",
         pattern=r"^(trace|debug|info|warn|error)$",
     )
-    ephemeral_node_timeout: str = Field(
-        default="30m", description="Ephemeral node timeout"
-    )
+    ephemeral_node_timeout: str = Field(default="30m", description="Ephemeral node timeout")
 
 
 class CloudflaredConfig(BaseServiceConfig):
     """Cloudflared tunnel configuration"""
 
     tunnel_name: str = Field(..., description="Tunnel name")
-    tunnel_id: Optional[str] = Field(
-        default=None, description="Tunnel ID (auto-generated)"
-    )
+    tunnel_id: Optional[str] = Field(default=None, description="Tunnel ID (auto-generated)")
     ingress_rules: List[Dict[str, str]] = Field(
         default_factory=list, description="Ingress mapping rules"
     )
@@ -294,18 +238,12 @@ class CloudflaredConfig(BaseServiceConfig):
 class VaultwardenConfig(BaseServiceConfig):
     """Vaultwarden (Bitwarden) password manager configuration"""
 
-    domain: Optional[str] = Field(
-        default=None, description="Public domain for Vaultwarden"
-    )
-    web_port: int = Field(
-        default=8080, description="Web interface port", ge=1, le=65535
-    )
+    domain: Optional[str] = Field(default=None, description="Public domain for Vaultwarden")
+    web_port: int = Field(default=8080, description="Web interface port", ge=1, le=65535)
     admin_token_enabled: bool = Field(default=True, description="Enable admin panel")
     signup_allowed: bool = Field(default=False, description="Allow new user signups")
     smtp_host: Optional[str] = Field(default=None, description="SMTP server hostname")
-    smtp_port: Optional[int] = Field(
-        default=587, description="SMTP server port", ge=1, le=65535
-    )
+    smtp_port: Optional[int] = Field(default=587, description="SMTP server port", ge=1, le=65535)
     smtp_username: Optional[str] = Field(default=None, description="SMTP username")
     smtp_from: Optional[str] = Field(default=None, description="SMTP from address")
 
@@ -313,17 +251,11 @@ class VaultwardenConfig(BaseServiceConfig):
 class VaultConfig(BaseServiceConfig):
     """HashiCorp Vault configuration"""
 
-    storage_backend: str = Field(
-        default="file", description="Storage backend (file/consul/etc)"
-    )
-    listener_port: int = Field(
-        default=8200, description="Vault listener port", ge=1, le=65535
-    )
+    storage_backend: str = Field(default="file", description="Storage backend (file/consul/etc)")
+    listener_port: int = Field(default=8200, description="Vault listener port", ge=1, le=65535)
     ui_enabled: bool = Field(default=True, description="Enable Vault UI")
     auto_unseal: bool = Field(default=False, description="Enable auto-unseal")
-    auto_unseal_provider: Optional[str] = Field(
-        default=None, description="Auto-unseal provider"
-    )
+    auto_unseal_provider: Optional[str] = Field(default=None, description="Auto-unseal provider")
     log_level: str = Field(default="info", description="Log level")
     dev_mode: bool = Field(default=False, description="Enable development mode")
 
@@ -333,15 +265,11 @@ class NextcloudConfig(BaseServiceConfig):
 
     admin_user: str = Field(default="admin", description="Admin username")
     http_port: int = Field(default=8081, description="HTTP port", ge=1, le=65535)
-    domain: Optional[str] = Field(
-        default=None, description="Public domain for Nextcloud"
-    )
+    domain: Optional[str] = Field(default=None, description="Public domain for Nextcloud")
     trusted_domains: List[str] = Field(
         default_factory=list, description="Additional trusted domains"
     )
-    upload_max_filesize: str = Field(
-        default="2G", description="Maximum upload file size"
-    )
+    upload_max_filesize: str = Field(default="2G", description="Maximum upload file size")
     memory_limit: str = Field(default="512M", description="PHP memory limit")
     redis_enabled: bool = Field(default=True, description="Enable Redis for caching")
     cron_enabled: bool = Field(default=True, description="Enable background cron jobs")
@@ -353,21 +281,13 @@ class NextcloudConfig(BaseServiceConfig):
 class GitlabConfig(BaseServiceConfig):
     """GitLab CE configuration"""
 
-    external_url: Optional[str] = Field(
-        default=None, description="External URL for GitLab"
-    )
-    ssh_port: int = Field(
-        default=22, description="SSH port for Git operations", ge=1, le=65535
-    )
+    external_url: Optional[str] = Field(default=None, description="External URL for GitLab")
+    ssh_port: int = Field(default=22, description="SSH port for Git operations", ge=1, le=65535)
     http_port: int = Field(default=80, description="HTTP port", ge=1, le=65535)
     https_port: int = Field(default=443, description="HTTPS port", ge=1, le=65535)
-    registry_enabled: bool = Field(
-        default=True, description="Enable container registry"
-    )
+    registry_enabled: bool = Field(default=True, description="Enable container registry")
     pages_enabled: bool = Field(default=True, description="Enable GitLab Pages")
-    backup_schedule: str = Field(
-        default="0 2 * * *", description="Backup cron schedule"
-    )
+    backup_schedule: str = Field(default="0 2 * * *", description="Backup cron schedule")
     ldap_enabled: bool = Field(default=False, description="Enable LDAP integration")
     ldap_host: Optional[str] = Field(default=None, description="LDAP server hostname")
     ldap_base_dn: Optional[str] = Field(default=None, description="LDAP base DN")
@@ -379,22 +299,12 @@ class GitlabConfig(BaseServiceConfig):
 class JenkinsConfig(BaseServiceConfig):
     """Jenkins CI/CD configuration"""
 
-    http_port: int = Field(
-        default=8080, description="Jenkins HTTP port", ge=1, le=65535
-    )
-    agent_port: int = Field(
-        default=50000, description="Jenkins agent port", ge=1, le=65535
-    )
-    java_opts: str = Field(
-        default="-Xms512m -Xmx1024m", description="Java runtime options"
-    )
+    http_port: int = Field(default=8080, description="Jenkins HTTP port", ge=1, le=65535)
+    agent_port: int = Field(default=50000, description="Jenkins agent port", ge=1, le=65535)
+    java_opts: str = Field(default="-Xms512m -Xmx1024m", description="Java runtime options")
     plugins: List[str] = Field(default_factory=list, description="Plugins to install")
-    security_realm: str = Field(
-        default="local", description="Security realm (local/ldap/etc)"
-    )
-    executor_count: int = Field(
-        default=2, description="Number of executors", ge=1, le=10
-    )
+    security_realm: str = Field(default="local", description="Security realm (local/ldap/etc)")
+    executor_count: int = Field(default=2, description="Number of executors", ge=1, le=10)
 
 
 class N8nConfig(BaseServiceConfig):
@@ -408,24 +318,18 @@ class N8nConfig(BaseServiceConfig):
     )
     auth_enabled: bool = Field(default=True, description="Enable user authentication")
     basic_auth_user: str = Field(default="admin", description="Basic auth username")
-    executions_mode: str = Field(
-        default="main", description="Executions mode (main/queue)"
-    )
+    executions_mode: str = Field(default="main", description="Executions mode (main/queue)")
 
 
 class FumadocsConfig(BaseServiceConfig):
     """Fumadocs documentation platform configuration"""
 
     port: int = Field(default=3000, description="Fumadocs port", ge=1, le=65535)
-    content_path: str = Field(
-        default="./docs", description="Path to documentation content"
-    )
+    content_path: str = Field(default="./docs", description="Path to documentation content")
     auth_enabled: bool = Field(default=False, description="Enable authentication")
     auth_provider: str = Field(default="local", description="Authentication provider")
     theme: str = Field(default="default", description="Documentation theme")
-    search_enabled: bool = Field(
-        default=True, description="Enable search functionality"
-    )
+    search_enabled: bool = Field(default=True, description="Enable search functionality")
 
 
 class CustomEnvironmentConfig(BaseModel):
@@ -501,15 +405,11 @@ class LabConfig(BaseModel):
             # Convert dict configs to proper model instances
             for service_id, config in services.items():
                 if isinstance(config, dict):
-                    config_class = service_config_types.get(
-                        service_id, BaseServiceConfig
-                    )
+                    config_class = service_config_types.get(service_id, BaseServiceConfig)
                     try:
                         services[service_id] = config_class(**config)
                     except Exception as e:
-                        raise ValueError(
-                            f"Invalid configuration for service '{service_id}': {e}"
-                        )
+                        raise ValueError(f"Invalid configuration for service '{service_id}': {e}")
 
             values["services"] = services
 
@@ -535,9 +435,7 @@ class LabConfig(BaseModel):
             data = self.model_dump()
             if "profile" in data:
                 data["profile"] = (
-                    data["profile"].value
-                    if hasattr(data["profile"], "value")
-                    else data["profile"]
+                    data["profile"].value if hasattr(data["profile"], "value") else data["profile"]
                 )
 
             yaml.dump(data, f, default_flow_style=False, indent=2, sort_keys=False)
@@ -583,9 +481,7 @@ class LabConfig(BaseModel):
             if hasattr(config, "port"):
                 port = config.port
                 if port in used_ports:
-                    issues.append(
-                        f"Port {port} used by both {used_ports[port]} and {service_id}"
-                    )
+                    issues.append(f"Port {port} used by both {used_ports[port]} and {service_id}")
                 else:
                     used_ports[port] = service_id
 
@@ -594,9 +490,7 @@ class LabConfig(BaseModel):
             if hasattr(config, "dependencies"):
                 for dep in config.dependencies:
                     if dep not in enabled_services:
-                        issues.append(
-                            f"Service {service_id} requires {dep} but it's not enabled"
-                        )
+                        issues.append(f"Service {service_id} requires {dep} but it's not enabled")
 
         return issues
 
@@ -663,9 +557,7 @@ def migrate_from_legacy(legacy_config: Dict[str, Any]) -> LabConfig:
                                 "email": core_data.get("email", "admin@example.com"),
                                 "acme_environment": (
                                     "staging"
-                                    if legacy_config.get("reverse_proxy", {}).get(
-                                        "staging", False
-                                    )
+                                    if legacy_config.get("reverse_proxy", {}).get("staging", False)
                                     else "production"
                                 ),
                             }
@@ -716,9 +608,7 @@ class Config(BaseModel):
         config_path.parent.mkdir(parents=True, exist_ok=True)
 
         with open(config_path, "w") as f:
-            yaml.dump(
-                self.model_dump(), f, default_flow_style=False, indent=2, sort_keys=False
-            )
+            yaml.dump(self.model_dump(), f, default_flow_style=False, indent=2, sort_keys=False)
 
     def validate_requirements(self) -> List[str]:
         """Validate configuration and return warnings"""

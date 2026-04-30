@@ -10,8 +10,6 @@ from rich.console import Console
 from rich.panel import Panel
 from rich.table import Table
 
-from ...core.config import Config
-from ...core.exceptions import HomeLabError
 from ...core.exceptions import HomeLabError
 
 console = Console()
@@ -66,9 +64,7 @@ def _get_docker_status(compose_path: Path, services: Optional[List[str]]) -> Dic
                         name = container_info.get("Names", "")
 
                         # Filter services if specified
-                        if services and not any(
-                            service in name for service in services
-                        ):
+                        if services and not any(service in name for service in services):
                             continue
 
                         status[name] = {
@@ -82,9 +78,7 @@ def _get_docker_status(compose_path: Path, services: Optional[List[str]]) -> Dic
 
     except subprocess.CalledProcessError:
         # If docker ps fails, try to show a helpful message
-        console.print(
-            "[yellow]Could not get container status. Is Docker running?[/yellow]"
-        )
+        console.print("[yellow]Could not get container status. Is Docker running?[/yellow]")
 
     return status
 
@@ -93,9 +87,7 @@ def _display_service_status(docker_status: Dict, health_status: Dict) -> None:
     """Display service status in a table"""
 
     if not docker_status:
-        console.print(
-            "[yellow]No containers found. Have you deployed the services yet?[/yellow]"
-        )
+        console.print("[yellow]No containers found. Have you deployed the services yet?[/yellow]")
         console.print("Run: [cyan]labctl deploy[/cyan] to deploy services")
         return
 
@@ -188,9 +180,7 @@ def _display_basic_info(config_file: str) -> None:
     info_items.append("  • Stop services: labctl stop")
     info_items.append("  • Redeploy: labctl deploy")
 
-    info_panel = Panel(
-        "\n".join(info_items), title="⚙️ System Information", border_style="blue"
-    )
+    info_panel = Panel("\n".join(info_items), title="⚙️ System Information", border_style="blue")
 
     console.print(info_panel)
 

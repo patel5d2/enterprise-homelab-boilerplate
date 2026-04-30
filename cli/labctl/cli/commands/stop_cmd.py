@@ -61,9 +61,7 @@ def run(
         console.print("\n[green]✅ Services stopped successfully[/green]")
 
         if remove_volumes:
-            console.print(
-                "[yellow]⚠️  Volumes have been removed - data may be lost[/yellow]"
-            )
+            console.print("[yellow]⚠️  Volumes have been removed - data may be lost[/yellow]")
 
     except Exception as e:
         raise HomeLabError(f"Failed to stop services: {str(e)}")
@@ -115,9 +113,7 @@ def _remove_volumes(compose_file: Path) -> None:
 
     except subprocess.CalledProcessError as e:
         error_output = e.stderr or e.stdout or "Unknown error"
-        console.print(
-            f"[yellow]Warning: Failed to remove volumes: {error_output}[/yellow]"
-        )
+        console.print(f"[yellow]Warning: Failed to remove volumes: {error_output}[/yellow]")
 
 
 def _cleanup_images() -> None:

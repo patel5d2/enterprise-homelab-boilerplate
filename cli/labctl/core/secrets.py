@@ -51,9 +51,7 @@ def generate_password(
         if charset is None:
             if ensure_complexity:
                 # Use full character set for complexity
-                charset = (
-                    string.ascii_letters + string.digits + "!@#$%^&*()_+-=[]{}|;:,.<>?"
-                )
+                charset = string.ascii_letters + string.digits + "!@#$%^&*()_+-=[]{}|;:,.<>?"
             else:
                 # Use alphanumeric for simpler passwords
                 charset = string.ascii_letters + string.digits
@@ -203,7 +201,8 @@ def load_or_create_env(env_path: Path = Path(".env")) -> Dict[str, str]:
                         env_vars[key] = value
                     else:
                         console.print(
-                            f"[yellow]Warning: Invalid format in {env_path} line {line_num}: {line}[/yellow]"
+                            f"[yellow]Warning: Invalid format in {env_path} "
+                            f"line {line_num}: {line}[/yellow]"
                         )
 
         except Exception as e:
@@ -340,9 +339,7 @@ def generate_service_secrets(
         # Preserve existing secrets
         if key in existing:
             secrets_dict[key] = existing[key]
-            console.print(
-                f"[dim]Preserved existing {secret_type} for {service_id}[/dim]"
-            )
+            console.print(f"[dim]Preserved existing {secret_type} for {service_id}[/dim]")
             continue
 
         # Generate new secrets
@@ -357,16 +354,15 @@ def generate_service_secrets(
                 secrets_dict[key] = generate_api_key(48)
             else:
                 console.print(
-                    f"[yellow]Warning: Unknown secret type '{secret_type}' for {service_id}[/yellow]"
+                    f"[yellow]Warning: Unknown secret type '{secret_type}' "
+                    f"for {service_id}[/yellow]"
                 )
                 continue
 
             console.print(f"[green]✓ Generated {secret_type} for {service_id}[/green]")
 
         except SecretGenerationError as e:
-            console.print(
-                f"[red]Error generating {secret_type} for {service_id}: {e}[/red]"
-            )
+            console.print(f"[red]Error generating {secret_type} for {service_id}: {e}[/red]")
 
     return secrets_dict
 
@@ -399,9 +395,7 @@ def redact_secrets(data: Any, redaction_text: str = "●●●●●●●●") 
 
     elif isinstance(data, str):
         # Check if the string itself looks like a secret
-        if len(data) > 16 and any(
-            c in data for c in string.ascii_letters + string.digits
-        ):
+        if len(data) > 16 and any(c in data for c in string.ascii_letters + string.digits):
             return redaction_text
         return data
 

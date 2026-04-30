@@ -92,12 +92,8 @@ def run(
         # Save migrated configuration
         save_labconfig_to_yaml(migrated_config, output_path)
 
-        console.print(
-            f"\n[bold green]✅ Migration completed successfully![/bold green]"
-        )
-        console.print(
-            f"[green]✓ Migrated configuration saved to: {output_path}[/green]"
-        )
+        console.print("\n[bold green]✅ Migration completed successfully![/bold green]")
+        console.print(f"[green]✓ Migrated configuration saved to: {output_path}[/green]")
 
         # Show next steps
         show_next_steps(output_path, migrated_config)
@@ -128,13 +124,9 @@ def show_migration_preview(legacy_data: dict, migrated_config: LabConfig) -> Non
 
     # Show core configuration
     legacy_core = legacy_data.get("core", {})
-    console.print(f"\n[bold]Core Configuration:[/bold]")
-    console.print(
-        f"  Domain: {legacy_core.get('domain', 'N/A')} → {migrated_config.core.domain}"
-    )
-    console.print(
-        f"  Email: {legacy_core.get('email', 'N/A')} → {migrated_config.core.email}"
-    )
+    console.print("\n[bold]Core Configuration:[/bold]")
+    console.print(f"  Domain: {legacy_core.get('domain', 'N/A')} → {migrated_config.core.domain}")
+    console.print(f"  Email: {legacy_core.get('email', 'N/A')} → {migrated_config.core.email}")
 
     # Show service migration
     enabled_services = migrated_config.get_enabled_services()
@@ -163,7 +155,7 @@ def show_migration_preview(legacy_data: dict, migrated_config: LabConfig) -> Non
 
     # Show custom environment variables
     if migrated_config.custom_env:
-        console.print(f"\n[bold]Custom Environment Variables:[/bold]")
+        console.print("\n[bold]Custom Environment Variables:[/bold]")
         for service_id, env_vars in migrated_config.custom_env.items():
             if env_vars:
                 console.print(f"  • {service_id}: {len(env_vars)} variables")
@@ -218,15 +210,13 @@ def show_next_steps(config_path: Path, migrated_config: LabConfig) -> None:
     console.print(table)
 
     # Show service URLs
-    console.print(f"\n[bold]🌐 Service URLs (after deployment):[/bold]")
+    console.print("\n[bold]🌐 Service URLs (after deployment):[/bold]")
     urls = migrated_config.get_service_urls()
     for service_id, url in urls.items():
         console.print(f"  • {service_id.title()}: {url}")
 
-    console.print(f"\n[dim]💡 The migrated configuration uses the new v2 format[/dim]")
-    console.print(
-        f"[dim]💡 You can now use service-specific configuration options[/dim]"
-    )
+    console.print("\n[dim]💡 The migrated configuration uses the new v2 format[/dim]")
+    console.print("[dim]💡 You can now use service-specific configuration options[/dim]")
 
 
 def validate_migration(legacy_data: dict, migrated_config: LabConfig) -> list:
@@ -244,10 +234,7 @@ def validate_migration(legacy_data: dict, migrated_config: LabConfig) -> list:
 
     # Check core fields were preserved
     legacy_core = legacy_data.get("core", {})
-    if (
-        legacy_core.get("domain")
-        and legacy_core["domain"] != migrated_config.core.domain
-    ):
+    if legacy_core.get("domain") and legacy_core["domain"] != migrated_config.core.domain:
         issues.append("Core domain was not preserved during migration")
 
     if legacy_core.get("email") and legacy_core["email"] != migrated_config.core.email:

@@ -55,9 +55,7 @@ class ComposeEnvSource(BaseModel):
     @classmethod
     def validate_env_key(cls, v):
         if not re.match(r"^[A-Z][A-Z0-9_]*$", v):
-            raise ValueError(
-                "Environment variable must be uppercase alphanumeric with underscores"
-            )
+            raise ValueError("Environment variable must be uppercase alphanumeric with underscores")
         return v
 
     model_config = ConfigDict(extra="forbid")
@@ -78,9 +76,7 @@ class ComposeHealthcheck(BaseModel):
 class ComposeDependsOn(BaseModel):
     """Docker depends_on configuration"""
 
-    condition: str = Field(
-        default="service_started", description="Dependency condition"
-    )
+    condition: str = Field(default="service_started", description="Dependency condition")
 
     @field_validator("condition")
     @classmethod
@@ -100,28 +96,20 @@ class ComposeDependsOn(BaseModel):
 class ComposeAdditionalService(BaseModel):
     """Additional service configuration"""
 
-    enabled_when: Optional[str] = Field(
-        None, description="Condition for enabling this service"
-    )
+    enabled_when: Optional[str] = Field(None, description="Condition for enabling this service")
     image: str = Field(..., description="Docker image")
     container_name: str = Field(..., description="Container name")
     restart: str = Field(default="unless-stopped", description="Restart policy")
     ports: Optional[List[str]] = Field(None, description="Port mappings")
     volumes: Optional[List[str]] = Field(None, description="Volume mounts")
     networks: Optional[List[str]] = Field(None, description="Networks to join")
-    environment: Optional[List[ComposeEnvSource]] = Field(
-        None, description="Environment variables"
-    )
+    environment: Optional[List[ComposeEnvSource]] = Field(None, description="Environment variables")
     labels: Optional[List[str]] = Field(None, description="Docker labels")
     depends_on: Optional[Dict[str, ComposeDependsOn]] = Field(
         None, description="Service dependencies"
     )
-    command: Optional[Union[str, List[str]]] = Field(
-        None, description="Container command"
-    )
-    entrypoint: Optional[Union[str, List[str]]] = Field(
-        None, description="Container entrypoint"
-    )
+    command: Optional[Union[str, List[str]]] = Field(None, description="Container command")
+    entrypoint: Optional[Union[str, List[str]]] = Field(None, description="Container entrypoint")
     privileged: Optional[bool] = Field(None, description="Privileged mode")
     cap_add: Optional[List[str]] = Field(None, description="Linux capabilities to add")
     devices: Optional[List[str]] = Field(None, description="Device mappings")
@@ -138,9 +126,7 @@ class ComposeSection(BaseModel):
     ports: Optional[List[str]] = Field(None, description="Port mappings")
     volumes: Optional[List[str]] = Field(None, description="Volume mounts")
     networks: Optional[List[str]] = Field(None, description="Networks to join")
-    environment: Optional[List[ComposeEnvSource]] = Field(
-        None, description="Environment variables"
-    )
+    environment: Optional[List[ComposeEnvSource]] = Field(None, description="Environment variables")
     labels: Optional[List[str]] = Field(None, description="Docker labels")
     depends_on: Optional[Dict[str, ComposeDependsOn]] = Field(
         None, description="Service dependencies"
@@ -148,12 +134,8 @@ class ComposeSection(BaseModel):
     healthcheck: Optional[ComposeHealthcheck] = Field(
         None, description="Health check configuration"
     )
-    command: Optional[Union[str, List[str]]] = Field(
-        None, description="Container command"
-    )
-    entrypoint: Optional[Union[str, List[str]]] = Field(
-        None, description="Container entrypoint"
-    )
+    command: Optional[Union[str, List[str]]] = Field(None, description="Container command")
+    entrypoint: Optional[Union[str, List[str]]] = Field(None, description="Container entrypoint")
     privileged: Optional[bool] = Field(None, description="Privileged mode")
     cap_add: Optional[List[str]] = Field(None, description="Linux capabilities to add")
     dns: Optional[List[str]] = Field(None, description="Custom DNS servers")
@@ -184,18 +166,12 @@ class FieldSchema(BaseModel):
     min_length: Optional[int] = Field(None, description="Minimum length (string)")
     max_length: Optional[int] = Field(None, description="Maximum length (string)")
     choices: Optional[List[str]] = Field(None, description="Available choices")
-    min_selections: Optional[int] = Field(
-        None, description="Minimum selections (multiselect)"
-    )
-    max_selections: Optional[int] = Field(
-        None, description="Maximum selections (multiselect)"
-    )
+    min_selections: Optional[int] = Field(None, description="Minimum selections (multiselect)")
+    max_selections: Optional[int] = Field(None, description="Maximum selections (multiselect)")
     generate: Optional[bool] = Field(None, description="Auto-generate value (password)")
     length: Optional[int] = Field(None, description="Generated length (password)")
     mask: Optional[bool] = Field(None, description="Mask input (password)")
-    show_if: Optional[str] = Field(
-        None, description="Conditional visibility expression"
-    )
+    show_if: Optional[str] = Field(None, description="Conditional visibility expression")
     hidden_if: Optional[str] = Field(None, description="Conditional hiding expression")
     depends_on: Optional[List[str]] = Field(None, description="Field dependencies")
 
@@ -242,9 +218,7 @@ class FieldSchema(BaseModel):
         values = info.data
         field_type = values.get("type")
         if v is not None and field_type != FieldType.MULTISELECT:
-            raise ValueError(
-                "min_selections/max_selections only valid for multiselect fields"
-            )
+            raise ValueError("min_selections/max_selections only valid for multiselect fields")
         return v
 
     model_config = ConfigDict(extra="forbid")
@@ -253,12 +227,8 @@ class FieldSchema(BaseModel):
 class ServiceDefaults(BaseModel):
     """Profile-specific defaults"""
 
-    dev: Optional[Dict[str, Any]] = Field(
-        None, description="Development profile defaults"
-    )
-    prod: Optional[Dict[str, Any]] = Field(
-        None, description="Production profile defaults"
-    )
+    dev: Optional[Dict[str, Any]] = Field(None, description="Development profile defaults")
+    prod: Optional[Dict[str, Any]] = Field(None, description="Production profile defaults")
 
     model_config = ConfigDict(extra="forbid")
 
@@ -270,28 +240,20 @@ class ServiceSchema(BaseModel):
     name: str = Field(..., description="Human-readable service name")
     category: str = Field(..., description="Service category")
     description: str = Field(..., description="Service description")
-    maturity: Maturity = Field(
-        default=Maturity.STABLE, description="Service maturity level"
-    )
+    maturity: Maturity = Field(default=Maturity.STABLE, description="Service maturity level")
     required_capabilities: List[str] = Field(
         default_factory=list, description="Required system capabilities"
     )
-    dependencies: List[str] = Field(
-        default_factory=list, description="Service dependencies"
-    )
+    dependencies: List[str] = Field(default_factory=list, description="Service dependencies")
     fields: List[FieldSchema] = Field(..., description="Configuration fields")
     compose: ComposeSection = Field(..., description="Docker compose configuration")
-    defaults: Optional[ServiceDefaults] = Field(
-        None, description="Profile-specific defaults"
-    )
+    defaults: Optional[ServiceDefaults] = Field(None, description="Profile-specific defaults")
 
     @field_validator("id")
     @classmethod
     def validate_id(cls, v):
         if not re.match(r"^[a-z][a-z0-9_]*$", v):
-            raise ValueError(
-                "Service ID must be lowercase alphanumeric with underscores"
-            )
+            raise ValueError("Service ID must be lowercase alphanumeric with underscores")
         return v
 
     @field_validator("fields")
@@ -320,9 +282,7 @@ class SchemaValidationError(Exception):
     def __init__(self, service_id: str, errors: List[str]):
         self.service_id = service_id
         self.errors = errors
-        super().__init__(
-            f"Schema validation failed for {service_id}: {'; '.join(errors)}"
-        )
+        super().__init__(f"Schema validation failed for {service_id}: {'; '.join(errors)}")
 
 
 @lru_cache(maxsize=32)
@@ -356,9 +316,7 @@ def load_service_schemas(
     # Find all YAML files
     yaml_files = list(schemas_path.glob("*.yaml")) + list(schemas_path.glob("*.yml"))
     if not yaml_files:
-        console.print(
-            f"[yellow]Warning: No YAML schema files found in {schemas_path}[/yellow]"
-        )
+        console.print(f"[yellow]Warning: No YAML schema files found in {schemas_path}[/yellow]")
         return {}
 
     for yaml_file in yaml_files:
@@ -370,9 +328,7 @@ def load_service_schemas(
                 data = yaml.safe_load(f)
 
             if not data:
-                console.print(
-                    f"[yellow]Warning: Empty schema file: {yaml_file}[/yellow]"
-                )
+                console.print(f"[yellow]Warning: Empty schema file: {yaml_file}[/yellow]")
                 continue
 
             schema = ServiceSchema(**data)
@@ -382,9 +338,7 @@ def load_service_schemas(
                 continue
 
             schemas[schema.id] = schema
-            console.print(
-                f"[green]✓[/green] Loaded schema: {schema.id} ({schema.name})"
-            )
+            console.print(f"[green]✓[/green] Loaded schema: {schema.id} ({schema.name})")
 
         except yaml.YAMLError as e:
             errors.append(f"YAML parsing error in {yaml_file}: {e}")
@@ -393,9 +347,7 @@ def load_service_schemas(
             for error in e.errors():
                 location = " -> ".join(str(loc) for loc in error["loc"])
                 error_messages.append(f"{location}: {error['msg']}")
-            errors.append(
-                f"Validation errors in {yaml_file}: {'; '.join(error_messages)}"
-            )
+            errors.append(f"Validation errors in {yaml_file}: {'; '.join(error_messages)}")
         except Exception as e:
             errors.append(f"Unexpected error loading {yaml_file}: {e}")
 
@@ -442,9 +394,7 @@ def validate_service_schema(schema: ServiceSchema) -> List[str]:
         if field.depends_on:
             for dep_field in field.depends_on:
                 if dep_field not in field_keys:
-                    errors.append(
-                        f"Field '{field.key}' depends on unknown field '{dep_field}'"
-                    )
+                    errors.append(f"Field '{field.key}' depends on unknown field '{dep_field}'")
 
     # Check compose environment references
     if schema.compose.environment:

@@ -52,21 +52,15 @@ def run(config_file: str, strict: bool = False, preflight: bool = False) -> None
                 warnings = config.validate_requirements()
 
                 if warnings:
-                    console.print(
-                        "\n[bold yellow]Legacy Configuration Warnings:[/bold yellow]"
-                    )
+                    console.print("\n[bold yellow]Legacy Configuration Warnings:[/bold yellow]")
                     for warning in warnings:
                         console.print(f"  • {warning}")
 
                 if warnings and strict:
                     raise HomeLabError("Strict validation failed due to warnings")
 
-                console.print(
-                    "\n[green]✅ Legacy configuration validation passed![/green]"
-                )
-                console.print(
-                    "[dim]💡 Use 'labctl migrate' to upgrade to v2 format[/dim]"
-                )
+                console.print("\n[green]✅ Legacy configuration validation passed![/green]")
+                console.print("[dim]💡 Use 'labctl migrate' to upgrade to v2 format[/dim]")
                 return
 
             except Exception as e:
@@ -79,9 +73,7 @@ def run(config_file: str, strict: bool = False, preflight: bool = False) -> None
             # Check validation results
             if errors:
                 error_count = len(errors)
-                console.print(
-                    f"\n[red]❌ Validation failed with {error_count} error(s)[/red]"
-                )
+                console.print(f"\n[red]❌ Validation failed with {error_count} error(s)[/red]")
                 if strict:
                     raise HomeLabError("Configuration validation failed")
             elif warnings and strict:
@@ -94,9 +86,7 @@ def run(config_file: str, strict: bool = False, preflight: bool = False) -> None
                     f"\n[yellow]⚠️  Validation completed with {len(warnings)} warning(s)[/yellow]"
                 )
             else:
-                console.print(
-                    "\n[green]✅ Configuration validation passed perfectly![/green]"
-                )
+                console.print("\n[green]✅ Configuration validation passed perfectly![/green]")
 
             # Run preflight checks if requested
             if preflight:

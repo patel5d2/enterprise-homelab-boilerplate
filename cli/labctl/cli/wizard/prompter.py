@@ -364,9 +364,7 @@ def prompt_multiselect(field: FieldSchema, default: Any = None) -> List[str]:
 
     while True:
         try:
-            user_input = Prompt.ask(
-                "Selections", default="", show_default=False, console=console
-            )
+            user_input = Prompt.ask("Selections", default="", show_default=False, console=console)
 
             if not user_input.strip():
                 # Use defaults
@@ -384,9 +382,7 @@ def prompt_multiselect(field: FieldSchema, default: Any = None) -> List[str]:
                         else:
                             raise ValidationError(f"Invalid choice number: {idx}")
                 except ValueError:
-                    raise ValidationError(
-                        "Please enter valid choice numbers separated by spaces"
-                    )
+                    raise ValidationError("Please enter valid choice numbers separated by spaces")
 
             return validate_field_value(field, result)
 
@@ -487,23 +483,17 @@ def ask_custom_environment_variables() -> Dict[str, str]:
     Returns:
         Dictionary of environment variable key-value pairs
     """
-    if not Confirm.ask(
-        "Add custom environment variables?", default=False, console=console
-    ):
+    if not Confirm.ask("Add custom environment variables?", default=False, console=console):
         return {}
 
     console.print("\n[bold]Custom Environment Variables[/bold]")
-    console.print(
-        "[dim]Enter KEY=value pairs. Press Enter with empty line to finish.[/dim]"
-    )
+    console.print("[dim]Enter KEY=value pairs. Press Enter with empty line to finish.[/dim]")
 
     env_vars = {}
 
     while True:
         try:
-            line = Prompt.ask(
-                "Environment variable (KEY=value)", default="", console=console
-            )
+            line = Prompt.ask("Environment variable (KEY=value)", default="", console=console)
 
             if not line.strip():
                 break
@@ -552,11 +542,7 @@ def display_field_summary(fields_data: Dict[str, Any], service_name: str) -> Non
             continue  # Skip enabled field in summary
 
         # Mask passwords and sensitive data
-        if (
-            "password" in key.lower()
-            or "token" in key.lower()
-            or "secret" in key.lower()
-        ):
+        if "password" in key.lower() or "token" in key.lower() or "secret" in key.lower():
             display_value = "●●●●●●●●" if value else "[dim]not set[/dim]"
         elif isinstance(value, list):
             display_value = ", ".join(value) if value else "[dim]none[/dim]"

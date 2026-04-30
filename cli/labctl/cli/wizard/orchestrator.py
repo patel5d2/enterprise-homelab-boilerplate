@@ -20,7 +20,6 @@ from rich.console import Console
 from rich.panel import Panel
 from rich.prompt import Confirm, Prompt
 from rich.table import Table
-from rich.table import Table
 
 from ...core.services import (
     DependencyGraph,
@@ -136,9 +135,7 @@ def _select_by_category(
             schema = schemas[sid]
             default_enabled = sid in already_enabled or bool(
                 schema.defaults
-                and (
-                    getattr(schema.defaults, "prod", {}) or {}
-                ).get("enabled", False)
+                and (getattr(schema.defaults, "prod", {}) or {}).get("enabled", False)
             )
             dep_note = (
                 f"  [dim](requires: {', '.join(schema.dependencies)})[/dim]"
@@ -223,9 +220,7 @@ def _configure_service(
     return plain_config, secret_vars
 
 
-def _resolve_with_display(
-    selected: Set[str], schemas: Dict[str, ServiceSchema]
-) -> List[str]:
+def _resolve_with_display(selected: Set[str], schemas: Dict[str, ServiceSchema]) -> List[str]:
     console.print("\n[bold]🔗 Resolving dependencies…[/bold]")
     graph = DependencyGraph(schemas)
     resolved = graph.resolve_dependencies(list(selected))
@@ -284,9 +279,7 @@ def _print_summary(
     console.print(
         f"\n[bold]Enabled:[/bold] {', '.join(schemas[s].name for s in sorted(enabled)) or 'none'}"
     )
-    console.print(
-        f"[bold]Disabled:[/bold] {len(disabled)} service(s)"
-    )
+    console.print(f"[bold]Disabled:[/bold] {len(disabled)} service(s)")
     if session.env_vars:
         console.print(f"\n[dim]🔐 {len(session.env_vars)} secret(s) will be written to .env[/dim]")
 
@@ -397,7 +390,8 @@ class WizardOrchestrator:
 
             # --- Category-based selection ---
             already_enabled: Set[str] = {
-                sid for sid, cfg in ex_services.items()
+                sid
+                for sid, cfg in ex_services.items()
                 if isinstance(cfg, dict) and cfg.get("enabled")
             }
 
@@ -463,11 +457,7 @@ class WizardOrchestrator:
             "version": 2,
             "profile": session.profile,
             "core": core,
-            "services": {
-                sid: cfg
-                for sid, cfg in session.service_configs.items()
-                if cfg
-            },
+            "services": {sid: cfg for sid, cfg in session.service_configs.items() if cfg},
             "custom_env": session.custom_env,
             "env_vars": session.env_vars,
         }

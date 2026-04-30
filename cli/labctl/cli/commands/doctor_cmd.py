@@ -42,7 +42,9 @@ def _check(name: str, fn: Callable[[], tuple[bool, str, Optional[str]]]) -> Chec
         passed, detail, hint = fn()
         return CheckResult(name, passed, detail, hint)
     except Exception as exc:  # never crash the whole doctor run
-        return CheckResult(name, False, f"Unexpected error: {exc}", "Run with --debug for a traceback.")
+        return CheckResult(
+            name, False, f"Unexpected error: {exc}", "Run with --debug for a traceback."
+        )
 
 
 # ── Individual checks ─────────────────────────────────────────────────────────
@@ -131,9 +133,7 @@ def check_docker() -> tuple[bool, str, Optional[str]]:
         )
 
     compose_ver = compose_result.stdout.strip().split()[-1] if compose_result.stdout else "?"
-    docker_ver_result = subprocess.run(
-        ["docker", "--version"], capture_output=True, text=True
-    )
+    docker_ver_result = subprocess.run(["docker", "--version"], capture_output=True, text=True)
     docker_ver = docker_ver_result.stdout.strip() if docker_ver_result.returncode == 0 else "?"
     return True, f"{docker_ver}, Compose {compose_ver}", None
 
@@ -218,9 +218,8 @@ def check_config_yaml(project_root: Path) -> tuple[bool, str, Optional[str]]:
     issues = []
     if unknown:
         issues.append(f"unknown service IDs: {', '.join(unknown)}")
-    detail = (
-        f"config.yaml OK — {len(enabled)} service(s) enabled"
-        + (f" (⚠ {'; '.join(issues)})" if issues else "")
+    detail = f"config.yaml OK — {len(enabled)} service(s) enabled" + (
+        f" (⚠ {'; '.join(issues)})" if issues else ""
     )
     passed = not issues
     hint = (

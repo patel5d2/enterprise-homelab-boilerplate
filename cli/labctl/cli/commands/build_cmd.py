@@ -60,9 +60,7 @@ def run(
             task = progress.add_task("Generating compose files...", total=100)
 
             # Generate Docker Compose configuration
-            progress.update(
-                task, description="Generating Docker Compose configuration..."
-            )
+            progress.update(task, description="Generating Docker Compose configuration...")
             compose_file = output_path / "docker-compose.yml"
             env_file = output_path / ".env.template"
 
@@ -84,9 +82,7 @@ def run(
             generator.save_env_template(env_file)
             progress.update(task, advance=20)
 
-        console.print(
-            "\n[green]✅ Docker Compose configuration built successfully![/green]"
-        )
+        console.print("\n[green]✅ Docker Compose configuration built successfully![/green]")
         console.print(f"[dim]✓ Created {compose_file.name}[/dim]")
         console.print(f"[dim]✓ Created {env_file.name}[/dim]")
         _show_next_steps(config, output_path)
@@ -119,12 +115,11 @@ def _show_next_steps(config, output_path: Path) -> None:
             if isinstance(config, LabConfig):
                 enabled_services = config.get_enabled_services()
                 for service_id in enabled_services.keys():
-                    console.print(
-                        f"  • {service_id.title()}: https://{service_id}.{domain}"
-                    )
+                    console.print(f"  • {service_id.title()}: https://{service_id}.{domain}")
     except Exception:
         console.print("  [dim]Service URLs will be available after deployment[/dim]")
 
     console.print(
-        f"\n[dim]💡 Deploy all services: docker compose -f {output_path}/docker-compose.yml up -d[/dim]"
+        f"\n[dim]💡 Deploy all services: "
+        f"docker compose -f {output_path}/docker-compose.yml up -d[/dim]"
     )
