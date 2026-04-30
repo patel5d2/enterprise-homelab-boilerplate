@@ -1,26 +1,32 @@
 """
-Init command - interactive setup wizard
+Init command — interactive home lab setup wizard (Phase 2).
+
+Changes vs legacy:
+  • Category-by-category service selection (not raw ID list)
+  • Dual-write: secrets → .env,  non-secrets → config.yaml
+  • --service <id>  to reconfigure just one service
+  • --non-interactive / --profile for CI/scripted use
+  • Idempotent: existing values loaded as defaults, Enter keeps them
 """
 
 from pathlib import Path
-from typing import Dict, Optional
+from typing import Optional
 
 import yaml
-from rich.columns import Columns
 from rich.console import Console
 from rich.panel import Panel
 from rich.prompt import Confirm, Prompt
 from rich.table import Table
 
-from ...core.config import Config
 from ...core.config_writer import save_config_to_yaml
 from ...core.exceptions import HomeLabError
 from ...core.secrets import load_or_create_env
-from ...core.services.deps import resolve_with_dependencies
 from ...core.services.schema import load_service_schemas
 from ..wizard.orchestrator import WizardOrchestrator
 
 console = Console()
+
+# ── Public entry point ────────────────────────────────────────────────────────
 
 
 def run(
@@ -29,209 +35,178 @@ def run(
     force: bool = False,
     profile: Optional[str] = None,
     non_interactive: bool = False,
+    service: Optional[str] = None,         # --service <id> — reconfigure one service
 ) -> None:
-    """Initialize new home lab configuration"""
+    """Initialize or reconfigure the home lab configuration."""
 
     config_path = Path(config_file)
+    # .env sits next to config.yaml
+    env_path = config_path.parent.parent / ".env"
 
-    # Check if config already exists
-    if config_path.exists() and not force:
-        console.print(f"[green]✓ Configuration file found at {config_file}[/green]")
-        
-        if not interactive or non_interactive:
-            console.print("[dim]Skipping initialization (use --force to overwrite)[/dim]")
+    # ── Load existing config (used as defaults on re-run) ──────────────────
+    existing_config: dict = {}
+    if config_path.exists():
+        try:
+            with open(config_path) as f:
+                existing_config = yaml.safe_load(f) or {}
+        except Exception:
+            pass
+
+    # ── Handle already-existing config ────────────────────────────────────
+    if config_path.exists() and not force and not service:
+        console.print(f"[green]✓ Configuration already exists at {config_file}[/green]")
+
+        if non_interactive or not interactive:
+            console.print("[dim]Skipping init (use --force to overwrite, --service to reconfigure one service)[/dim]")
+            _show_next_steps(existing_config)
             return
 
         action = Prompt.ask(
-            "Configuration already exists. What would you like to do?",
+            "Config exists — what would you like to do?",
             choices=["skip", "reconfigure", "overwrite"],
-            default="skip"
+            default="skip",
         )
-
         if action == "skip":
-            console.print("[dim]Skipping initialization[/dim]")
-            # Still show next steps for helpfulness
-            try:
-                with open(config_path, "r") as f:
-                    existing_config = yaml.safe_load(f)
-                _show_next_steps_v2(existing_config)
-            except Exception:
-                pass
+            _show_next_steps(existing_config)
             return
         elif action == "reconfigure":
-            console.print("[blue]Starting reconfiguration...[/blue]")
-            # Continue to wizard
-        else: # overwrite
-            if not Confirm.ask("Are you sure you want to overwrite your existing configuration?"):
-                console.print("[yellow]Initialization cancelled[/yellow]")
+            console.print("[blue]Starting reconfiguration with existing values as defaults…[/blue]")
+            # fall through to wizard with existing_config
+        else:  # overwrite
+            if not Confirm.ask("⚠  Overwrite existing configuration?"):
+                console.print("[yellow]Cancelled[/yellow]")
                 return
+            existing_config = {}
 
-    # Check for legacy config and offer migration
-    if config_path.exists() and not non_interactive:
-        try:
-            with open(config_path, "r") as f:
-                existing_config = yaml.safe_load(f)
-            if existing_config and not existing_config.get("version"):
-                console.print("[yellow]⚠️  Legacy configuration detected[/yellow]")
-                if Confirm.ask(
-                    "Would you like to migrate to the new configuration format?"
-                ):
-                    console.print(
-                        "[blue]Migration feature will be available soon. Please backup your config and create a new one.[/blue]"
-                    )
-                    return
-        except Exception:
-            pass  # Ignore errors reading existing config
-
-    console.print(
-        Panel.fit(
-            "🏠 [bold blue]Home Lab Setup Wizard v2.0[/bold blue] 🏠\n\n"
-            "Welcome to the new Enterprise Home Lab setup wizard!\n"
-            "This will guide you through configuring your infrastructure\n"
-            "with service-specific settings and dependency management.",
-            border_style="blue",
-        )
-    )
-
+    # ── Load service schemas ───────────────────────────────────────────────
+    # Schema dir is always relative to this file's project root
+    project_root = config_path.parent.parent
+    schemas_dir = project_root / "config" / "services-v2"
     try:
-        # Load service schemas
-        schemas_path = config_path.parent.parent / "config" / "services-v2"
-        service_schemas = load_service_schemas(str(schemas_path))
+        service_schemas = load_service_schemas(str(schemas_dir))
+    except Exception as exc:
+        raise HomeLabError(f"Cannot load service schemas from {schemas_dir}: {exc}")
 
-        if interactive and not non_interactive:
-            # Run the new wizard
-            orchestrator = WizardOrchestrator(service_schemas)
-            config_data = orchestrator.run_wizard(profile=profile)
-        else:
-            config_data = _default_setup_v2(profile or "prod")
+    orchestrator = WizardOrchestrator(service_schemas)
 
-        # Save configuration and environment variables
-        save_config_to_yaml(config_data, config_path)
-
-        # Create .env file with secrets
-        env_path = config_path.parent / ".env"
-        env_vars = config_data.get("env_vars", {})
-        if env_vars:
-            load_or_create_env(str(env_path), env_vars)
-
-        console.print(f"\n[green]✅ Configuration saved to {config_file}[/green]")
-        if env_vars:
-            console.print(
-                f"[green]✅ Environment variables saved to {env_path}[/green]"
+    # ── Run wizard ─────────────────────────────────────────────────────────
+    try:
+        if service:
+            # Single-service reconfigure
+            if service not in service_schemas:
+                known = ", ".join(sorted(service_schemas.keys()))
+                raise HomeLabError(f"Unknown service '{service}'. Known services: {known}")
+            console.print(f"\n[bold blue]⚙  Reconfiguring {service_schemas[service].name} only[/bold blue]")
+            svc_cfg, svc_env = orchestrator.run_single_service(
+                service_id=service,
+                existing_config=existing_config,
+                profile=profile or existing_config.get("profile", "prod"),
             )
+            existing_config.setdefault("services", {})[service] = svc_cfg
+            existing_config.setdefault("env_vars", {}).update(svc_env)
+            config_data = existing_config
+        else:
+            config_data = orchestrator.run_wizard(
+                profile=profile,
+                existing_config=existing_config,
+                non_interactive=non_interactive,
+            )
+    except KeyboardInterrupt:
+        console.print("\n[yellow]Wizard cancelled[/yellow]")
+        return
+    except ValueError as exc:
+        # Wizard-internal cancellations (not confirmed, no services selected, etc.)
+        console.print(f"[yellow]{exc}[/yellow]")
+        return
 
-        # Create directory structure
-        _create_directories(config_path.parent)
+    # ── Write outputs ──────────────────────────────────────────────────────
+    try:
+        # Strip env_vars from config before writing config.yaml
+        env_vars = config_data.pop("env_vars", {})
 
-        # Show next steps
-        _show_next_steps_v2(config_data)
+        save_config_to_yaml(config_data, config_path)
+        console.print(f"\n[green]✅ Configuration saved → {config_file}[/green]")
 
-    except Exception as e:
-        raise HomeLabError(f"Failed to save configuration: {str(e)}")
+        if env_vars:
+            _merge_env_file(env_path, env_vars)
+            console.print(f"[green]✅ Secrets merged   → {env_path}[/green]")
+        elif not env_path.exists():
+            console.print(f"[dim]ℹ  No secrets to write — .env unchanged[/dim]")
+
+    except Exception as exc:
+        raise HomeLabError(f"Failed to save configuration: {exc}")
+
+    # ── Create directory structure ─────────────────────────────────────────
+    _create_directories(config_path.parent)
+
+    # ── Next steps ─────────────────────────────────────────────────────────
+    _show_next_steps(config_data)
 
 
-def _default_setup_v2(profile: str = "prod") -> dict:
-    """Default configuration setup using new schema format"""
+# ── Helpers ───────────────────────────────────────────────────────────────────
 
-    console.print(f"[yellow]Creating default {profile} configuration...[/yellow]")
 
-    return {
-        "version": 2,
-        "profile": profile,
-        "core": {"domain": "homelab.local", "email": "admin@homelab.local"},
-        "services": {
-            "traefik": {
-                "enabled": True,
-                "domain": "homelab.local",
-                "email": "admin@homelab.local",
-                "acme_environment": "staging" if profile == "dev" else "production",
-            },
-            "postgresql": {"enabled": True, "port": 5432, "superuser": "postgres"},
-            "redis": {"enabled": True, "port": 6379, "persistence": "rdb"},
-            "monitoring": {
-                "enabled": True,
-                "prometheus_retention": "15d" if profile == "dev" else "30d",
-                "external_port": 9090,
-            },
-        },
-        "custom_env": {},
-        "env_vars": {
-            "POSTGRES_PASSWORD": "$(generate_password)",
-            "REDIS_PASSWORD": "$(generate_password)",
-            "GRAFANA_ADMIN_PASSWORD": "$(generate_password)",
-        },
-    }
+def _merge_env_file(env_path: Path, new_vars: dict) -> None:
+    """
+    Merge new_vars into .env.
+    - Existing keys are NOT overwritten (preserves hand-edited values).
+    - New keys are appended.
+    """
+    existing_keys: dict = {}
+    lines: list[str] = []
+
+    if env_path.exists():
+        for line in env_path.read_text().splitlines():
+            lines.append(line)
+            stripped = line.strip()
+            if stripped and not stripped.startswith("#") and "=" in stripped:
+                k = stripped.split("=", 1)[0].strip()
+                existing_keys[k] = True
+
+    added = 0
+    for key, value in new_vars.items():
+        if key not in existing_keys:
+            if added == 0:
+                lines.append("\n# Added by labctl init")
+            lines.append(f"{key}={value}")
+            added += 1
+
+    env_path.parent.mkdir(parents=True, exist_ok=True)
+    env_path.write_text("\n".join(lines) + "\n")
 
 
 def _create_directories(base_path: Path) -> None:
-    """Create necessary directory structure"""
-
-    directories = [
-        "compose",
-        "data",
-        "logs",
-        "backups",
-        "config/secrets",
-        "ssl",
-    ]
-
-    for directory in directories:
-        dir_path = base_path / directory
-        dir_path.mkdir(parents=True, exist_ok=True)
-
-    console.print(f"[green]📁 Created directory structure in {base_path}[/green]")
+    for d in ["compose", "data", "logs", "backups", "config/secrets", "ssl"]:
+        (base_path / d).mkdir(parents=True, exist_ok=True)
+    console.print(f"[green]📁 Directory structure ready in {base_path}[/green]")
 
 
-def _show_next_steps_v2(config: dict) -> None:
-    """Show next steps after initialization using new config format"""
-
-    console.print("\n[bold]🎯 Next Steps:[/bold]")
-
-    table = Table(show_header=False, show_lines=True)
-    table.add_column("Step", style="cyan", width=4)
-    table.add_column("Action", style="white")
-
-    table.add_row("1", "Validate configuration: [cyan]labctl validate[/cyan]")
-    table.add_row("2", "Build compose files: [cyan]labctl build[/cyan]")
-    table.add_row("3", "Deploy infrastructure: [cyan]labctl deploy[/cyan]")
-    table.add_row("4", "Check status: [cyan]labctl status[/cyan]")
-
-    console.print(table)
-
-    # Service URLs based on new config format
-    console.print(f"\n[bold]🌐 Service URLs (after deployment):[/bold]")
+def _show_next_steps(config: dict) -> None:
     domain = config.get("core", {}).get("domain", "homelab.local")
     services = config.get("services", {})
+    enabled = [s for s, c in services.items() if isinstance(c, dict) and c.get("enabled")]
+    disabled_count = len(services) - len(enabled)
 
-    base_urls = {}
+    console.print("\n[bold]🎯 Next Steps[/bold]")
+    table = Table(show_header=False, show_lines=False, box=None)
+    table.add_column("", style="cyan", width=3)
+    table.add_column("", style="white")
+    table.add_row("1.", "Validate:   [cyan]labctl validate[/cyan]")
+    table.add_row("2.", "Build:      [cyan]labctl build[/cyan]")
+    table.add_row("3.", "Deploy:     [cyan]labctl deploy[/cyan]")
+    table.add_row("4.", "Health:     [cyan]labctl doctor[/cyan]")
+    console.print(table)
 
-    # Always show Traefik if enabled
-    if services.get("traefik", {}).get("enabled"):
-        base_urls["traefik"] = f"https://traefik.{domain}"
+    if enabled:
+        console.print(f"\n[bold]Enabled ({len(enabled)}):[/bold] {', '.join(enabled)}")
+    if disabled_count:
+        console.print(f"[dim]Disabled: {disabled_count} other service(s)[/dim]")
 
-    # Add URLs for enabled services
-    if services.get("monitoring", {}).get("enabled"):
-        base_urls["grafana"] = f"https://grafana.{domain}"
-        base_urls["prometheus"] = f"https://prometheus.{domain}"
+    # Service URLs
+    urls = {s: f"https://{s}.{domain}" for s in enabled if s not in ("postgresql", "redis", "mongodb")}
+    if urls:
+        console.print("\n[bold]🌐 Service URLs (after deploy):[/bold]")
+        for svc, url in list(urls.items())[:6]:
+            console.print(f"  • {svc}: {url}")
 
-    if services.get("vaultwarden", {}).get("enabled"):
-        base_urls["vaultwarden"] = f"https://vault.{domain}"
-
-    if services.get("nextcloud", {}).get("enabled"):
-        base_urls["nextcloud"] = f"https://nextcloud.{domain}"
-
-    if services.get("pihole", {}).get("enabled"):
-        base_urls["pihole"] = f"https://pihole.{domain}"
-
-    if services.get("gitlab", {}).get("enabled"):
-        base_urls["gitlab"] = f"https://gitlab.{domain}"
-
-    for service, url in base_urls.items():
-        console.print(f"  • {service.title()}: {url}")
-
-    # Show profile info
-    profile = config.get("profile", "prod")
-    console.print(f"\n[dim]📋 Configuration profile: {profile}[/dim]")
-    console.print(
-        f"[dim]💡 Edit configuration anytime with: labctl config --edit[/dim]"
-    )
+    console.print(f"\n[dim]Profile: {config.get('profile', 'prod')} | Re-run: labctl init --service <id>[/dim]")

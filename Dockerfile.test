@@ -1,0 +1,79 @@
+# Bootstrap smoke test
+# Based on ubuntu:24.04 — mirrors a typical fresh-machine Linux install.
+# Usage: docker build -f Dockerfile.test -t homelab-test . && docker run --rm homelab-test
+
+FROM ubuntu:24.04
+
+# Avoid interactive prompts
+ENV DEBIAN_FRONTEND=noninteractive
+
+# Install system prerequisites that bootstrap.sh would normally handle
+RUN apt-get update -qq && \
+    apt-get install -y --no-install-recommends \
+        python3.12 \
+        python3.12-venv \
+        python3-pip \
+        git \
+        make \
+        curl \
+        ca-certificates \
+    && rm -rf /var/lib/apt/lists/*
+
+# Ensure python3 resolves to 3.12
+RUN update-alternatives --install /usr/bin/python3 python3 /usr/bin/python3.12 1
+
+WORKDIR /workspace
+
+# Copy the whole project in
+COPY . .
+
+# Make scripts executable
+RUN chmod +x bootstrap.sh install.sh labctl
+
+# Run bootstrap in non-interactive + dry-run mode to validate the logic paths
+# (Docker has no Docker daemon, so we skip the actual pip install separately below)
+RUN bash bootstrap.sh --non-interactive --dry-run
+
+# Verify the venv and package can be installed directly (no Docker daemon needed)
+RUN python3 -m venv venv && \
+    venv/bin/pip install --quiet --upgrade pip && \
+    venv/bin/pip install --quiet -e ".[dev]"
+
+# Generate a minimal .env so doctor can pass the .env check
+RUN python3 -c "
+import secrets, pathlib
+env = pathlib.Path('.env')
+template = pathlib.Path('.env.template')
+if template.exists():
+    lines = []
+    for line in template.read_text().splitlines():
+        stripped = line.strip()
+        if not stripped or stripped.startswith('#'):
+            lines.append(line)
+            continue
+        if '=' not in stripped:
+            lines.append(line)
+            continue
+        k, v = stripped.split('=', 1)
+        if v.startswith('your-'):
+            lines.append(f'{k}={secrets.token_hex(32)}')
+        else:
+            lines.append(line)
+    env.write_text('\n'.join(lines) + '\n')
+else:
+    env.write_text('POSTGRES_PASSWORD=' + secrets.token_hex(32) + '\n')
+"
+
+# Smoke-test: labctl --help must exit 0
+RUN ./labctl --help > /dev/null
+
+# Smoke-test: labctl init --help must exit 0
+RUN ./labctl init --help > /dev/null
+
+# Smoke-test: labctl doctor --help must exit 0
+RUN ./labctl doctor --help > /dev/null
+
+# Smoke-test: full test suite must pass
+RUN venv/bin/pytest tests/ -v --tb=short
+
+CMD ["./labctl", "--help"]

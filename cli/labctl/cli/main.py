@@ -119,12 +119,19 @@ def init_command(
         "--non-interactive",
         help="Skip all prompts and use defaults",
     ),
+    service: Optional[str] = typer.Option(
+        None,
+        "--service",
+        "-s",
+        help="Reconfigure a single service only (e.g. --service postgres)",
+    ),
 ) -> None:
     """
-    🚀 Initialize new home lab configuration
+    🚀 Initialize or reconfigure home lab services
 
-    Creates a new configuration file with guided setup wizard.
-    Uses the new service-specific configuration system with dependency management.
+    Runs the category-based setup wizard. Existing values are shown as defaults.
+    Use --service <id> to reconfigure just one service without touching others.
+    Use --non-interactive for CI/scripted deployments.
     """
     try:
         init_cmd.run(
@@ -133,6 +140,7 @@ def init_command(
             force=force,
             profile=profile,
             non_interactive=non_interactive,
+            service=service,
         )
     except HomeLabError as e:
         console.print(f"[red]Error:[/red] {e.message}")

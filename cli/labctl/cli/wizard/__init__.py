@@ -1,15 +1,8 @@
 """
-Wizard module for interactive service configuration
-
-This module provides interactive wizards for configuring Home Lab services
-with beautiful Rich UI and comprehensive validation.
+Wizard module for interactive service configuration.
 """
 
-from .orchestrator import (
-    WizardSession,
-    create_dependency_tree_display,
-    run_wizard,
-)
+from .orchestrator import WizardOrchestrator, WizardSession
 from .prompter import (
     ConditionalExpressionEvaluator,
     ValidationError,
@@ -20,13 +13,12 @@ from .prompter import (
 )
 
 __all__ = [
+    "WizardOrchestrator",
+    "WizardSession",
     "ask_field",
     "ask_custom_environment_variables",
     "display_field_summary",
     "generate_password",
     "ValidationError",
     "ConditionalExpressionEvaluator",
-    "WizardSession",
-    "run_wizard",
-    "create_dependency_tree_display",
 ]
