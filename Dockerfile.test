@@ -2,7 +2,7 @@
 # Based on ubuntu:24.04 — mirrors a typical fresh-machine Linux install.
 # Usage: docker build -f Dockerfile.test -t homelab-test . && docker run --rm homelab-test
 
-FROM ubuntu:24.04
+FROM python:3.12-slim
 
 # Avoid interactive prompts
 ENV DEBIAN_FRONTEND=noninteractive
@@ -10,17 +10,11 @@ ENV DEBIAN_FRONTEND=noninteractive
 # Install system prerequisites that bootstrap.sh would normally handle
 RUN apt-get update -qq && \
     apt-get install -y --no-install-recommends \
-        python3.12 \
-        python3.12-venv \
-        python3-pip \
         git \
         make \
         curl \
         ca-certificates \
     && rm -rf /var/lib/apt/lists/*
-
-# Ensure python3 resolves to 3.12
-RUN update-alternatives --install /usr/bin/python3 python3 /usr/bin/python3.12 1
 
 WORKDIR /workspace
 
@@ -40,9 +34,9 @@ RUN python3 -m venv venv && \
     venv/bin/pip install --quiet -e ".[dev]"
 
 # Generate a minimal .env so doctor can pass the .env check
-RUN python3 -c "
+RUN cat << 'EOF' > /tmp/gen_env.py
 import secrets, pathlib
-env = pathlib.Path('.env')
+env_file = pathlib.Path('.env')
 template = pathlib.Path('.env.template')
 if template.exists():
     lines = []
@@ -59,10 +53,11 @@ if template.exists():
             lines.append(f'{k}={secrets.token_hex(32)}')
         else:
             lines.append(line)
-    env.write_text('\n'.join(lines) + '\n')
+    env_file.write_text('\n'.join(lines) + '\n')
 else:
-    env.write_text('POSTGRES_PASSWORD=' + secrets.token_hex(32) + '\n')
-"
+    env_file.write_text('POSTGRES_PASSWORD=' + secrets.token_hex(32) + '\n')
+EOF
+RUN python3 /tmp/gen_env.py
 
 # Smoke-test: labctl --help must exit 0
 RUN ./labctl --help > /dev/null

@@ -186,7 +186,7 @@ if [ "$OS" = "macos" ]; then
     if $NON_INTERACTIVE; then
       error "Homebrew is required on macOS but is not installed."
       error "Install it from https://brew.sh then re-run this script."
-      exit 1
+      $DRY_RUN || exit 1
     fi
     warn "Homebrew is not installed."
     if prompt_yes_no "Install Homebrew now?"; then
@@ -201,7 +201,7 @@ if [ "$OS" = "macos" ]; then
       fi
     else
       error "Homebrew is required to install other dependencies on macOS. Aborting."
-      exit 1
+      $DRY_RUN || exit 1
     fi
   else
     success "Homebrew is installed ($(brew --version | head -1))"
@@ -241,7 +241,7 @@ else
 
     if $NON_INTERACTIVE; then
       error "Python ${REQUIRED_PYTHON}+ not found. Aborting (--non-interactive)."
-      exit 1
+      $DRY_RUN || exit 1
     fi
 
     if prompt_yes_no "Install Python ${REQUIRED_PYTHON} via package manager now?" false; then
@@ -268,13 +268,13 @@ else
       error "  macOS: brew install python@3.11"
       error "  Ubuntu: sudo apt install python3.11"
       error "  pyenv: https://github.com/pyenv/pyenv"
-      exit 1
+      $DRY_RUN || exit 1
     fi
   else
     # No Python3 at all
     if $NON_INTERACTIVE; then
       error "Python 3 not found. Aborting (--non-interactive)."
-      exit 1
+      $DRY_RUN || exit 1
     fi
     if prompt_yes_no "Python 3 not found. Install Python ${REQUIRED_PYTHON} now?"; then
       case "$OS" in
@@ -286,7 +286,7 @@ else
       PYTHON_BIN="python3"
     else
       error "Python 3 is required. Aborting."
-      exit 1
+      $DRY_RUN || exit 1
     fi
   fi
 fi
@@ -314,34 +314,34 @@ if $DOCKER_MISSING; then
     info "Download from: https://www.docker.com/products/docker-desktop/"
     if $NON_INTERACTIVE; then
       error "Docker not found. Aborting (--non-interactive). Install Docker Desktop and retry."
-      exit 1
+      $DRY_RUN || exit 1
     fi
     warn "Please install Docker Desktop, then re-run this script."
     echo ""
     read -r -p "Press [Enter] once Docker Desktop is installed, or Ctrl-C to abort..."
     if ! command -v docker &>/dev/null; then
       error "Docker still not found. Aborting."
-      exit 1
+      $DRY_RUN || exit 1
     fi
   else
     # Linux — can install via get.docker.com
     if $NON_INTERACTIVE; then
       error "Docker not found. Aborting (--non-interactive)."
-      exit 1
+      $DRY_RUN || exit 1
     fi
     if prompt_yes_no "Install Docker Engine via get.docker.com (requires sudo)?"; then
       if $DRY_RUN; then
         dryrun "curl -fsSL https://get.docker.com | sudo sh"
-        dryrun "sudo usermod -aG docker $USER"
+        dryrun "sudo usermod -aG docker ${USER:-root}"
       else
         curl -fsSL https://get.docker.com | sudo sh
-        sudo usermod -aG docker "$USER"
+        sudo usermod -aG docker "${USER:-root}"
         warn "Docker installed. You may need to log out and back in for group membership."
         warn "Or run: newgrp docker"
       fi
     else
       error "Docker is required. Aborting."
-      exit 1
+      $DRY_RUN || exit 1
     fi
   fi
 elif $COMPOSE_MISSING; then
@@ -350,7 +350,7 @@ elif $COMPOSE_MISSING; then
   info "  https://docs.docker.com/compose/install/"
   if $NON_INTERACTIVE; then
     error "Docker Compose not found. Aborting (--non-interactive)."
-    exit 1
+    $DRY_RUN || exit 1
   fi
 else
   DOCKER_VER=$(docker --version 2>&1 | cut -d' ' -f3 | tr -d ',')
