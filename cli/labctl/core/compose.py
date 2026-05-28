@@ -433,9 +433,39 @@ class ComposeGenerator:
     def _substitute_template(self, template: str, service_id: str, service_config: Any) -> str:
         """Substitute template variables with actual values"""
         import re
+        import jinja2
 
-        result = template
+        # Create Jinja2 environment with custom delimiters (ChristianLempa style)
+        jinja_env = jinja2.Environment(
+            variable_start_string='<<',
+            variable_end_string='>>',
+            block_start_string='<%',
+            block_end_string='%>',
+            comment_start_string='<#',
+            comment_end_string='#>',
+        )
 
+        # Prepare context for Jinja2
+        context = {
+            "service": service_id,
+            "SERVICE_ID": service_id,
+            "DOMAIN": self._get_domain(),
+            "env": self.config.env_vars if hasattr(self.config, "env_vars") else (self.config.get("env_vars", {}) if isinstance(self.config, dict) else {})
+        }
+
+        if isinstance(service_config, dict):
+            context.update(service_config)
+        elif hasattr(service_config, "__dict__"):
+            context.update(service_config.__dict__)
+
+        try:
+            jinja_template = jinja_env.from_string(template)
+            result = jinja_template.render(**context)
+        except Exception as e:
+            # Fallback if Jinja parsing fails
+            result = template
+
+        # Apply legacy replacements for backward compatibility
         # Replace ${field} with service config values
         if isinstance(service_config, dict):
             for key, value in service_config.items():

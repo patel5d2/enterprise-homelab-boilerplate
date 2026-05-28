@@ -18,7 +18,8 @@ try:
     from rich.panel import Panel
 except ImportError:
     print("Installing dependencies...")
-    os.system("pip install rich")
+    import subprocess
+    subprocess.check_call([sys.executable, "-m", "pip", "install", "rich"])
     from rich.console import Console
     from rich.progress import track
     from rich.panel import Panel
@@ -212,7 +213,7 @@ class InfrastructureGenerator:
             "depends_on": ["postgres"],
             "command": [
                 "sh", "-c",
-                f"while true; do sleep 86400; pg_dumpall -h postgres > /backups/backup-$(date +%Y%m%d-%H%M%S).sql; find /backups -name '*.sql' -mtime +{backup_config.get('retention_days', 30)} -delete; done"
+                f"while true; do sleep 86400; pg_dumpall -h postgres > /backups/backup-$(date +%Y%m%d-%H%M%S).sql; find /backups -name '*.sql' -mtime +{int(backup_config.get('retention_days', 30))} -delete; done"
             ]
         }
         
