@@ -2,9 +2,11 @@
 Schema-driven Docker Compose generator for Home Lab services
 """
 
+import re
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Union
 
+import jinja2
 import yaml
 from rich.console import Console
 
@@ -149,6 +151,7 @@ class ComposeGenerator:
             "container_name": service_id,
             "restart": "unless-stopped",
             "networks": ["traefik"],
+            **self._default_hardening(schema),
         }
 
         try:
@@ -249,6 +252,28 @@ class ComposeGenerator:
 
         return compose_service
 
+    def _default_hardening(self, schema: Optional[ServiceSchema] = None) -> Dict[str, Any]:
+        """Security and operational defaults applied to every generated service.
+
+        - no-new-privileges blocks privilege escalation via setuid binaries
+          (skipped for privileged services, where it has no effect anyway)
+        - log rotation prevents unbounded json-file logs from filling the disk
+        """
+        hardening: Dict[str, Any] = {
+            "logging": {
+                "driver": "json-file",
+                "options": {"max-size": "10m", "max-file": "3"},
+            }
+        }
+
+        is_privileged = bool(
+            schema and schema.compose and getattr(schema.compose, "privileged", False)
+        )
+        if not is_privileged:
+            hardening["security_opt"] = ["no-new-privileges:true"]
+
+        return hardening
+
     def _generate_service_legacy(
         self, service_id: str, service_config: Any
     ) -> Optional[Dict[str, Any]]:
@@ -260,6 +285,7 @@ class ComposeGenerator:
             "container_name": service_id,
             "restart": "unless-stopped",
             "networks": ["traefik"],
+            **self._default_hardening(),
         }
 
         # Try to determine image from service ID
@@ -356,8 +382,6 @@ class ComposeGenerator:
             # Handle template substitution
             if "${" in port_spec:
                 # Extract field name from ${field_name}
-                import re
-
                 field_matches = re.findall(r"\$\{(\w+)\}", port_spec)
                 for field_name in field_matches:
                     if hasattr(service_config, field_name):
@@ -432,25 +456,31 @@ class ComposeGenerator:
 
     def _substitute_template(self, template: str, service_id: str, service_config: Any) -> str:
         """Substitute template variables with actual values"""
-        import re
-        import jinja2
-
-        # Create Jinja2 environment with custom delimiters (ChristianLempa style)
-        jinja_env = jinja2.Environment(
-            variable_start_string='<<',
-            variable_end_string='>>',
-            block_start_string='<%',
-            block_end_string='%>',
-            comment_start_string='<#',
-            comment_end_string='#>',
+        # Create Jinja2 environment with custom delimiters (ChristianLempa style).
+        # Autoescape is irrelevant here (YAML, not HTML); undefined variables
+        # render as empty strings to keep backward compatibility.
+        jinja_env = jinja2.Environment(  # nosec B701
+            variable_start_string="<<",
+            variable_end_string=">>",
+            block_start_string="<%",
+            block_end_string="%>",
+            comment_start_string="<#",
+            comment_end_string="#>",
         )
+
+        if hasattr(self.config, "env_vars"):
+            env_vars = self.config.env_vars
+        elif isinstance(self.config, dict):
+            env_vars = self.config.get("env_vars", {})
+        else:
+            env_vars = {}
 
         # Prepare context for Jinja2
         context = {
             "service": service_id,
             "SERVICE_ID": service_id,
             "DOMAIN": self._get_domain(),
-            "env": self.config.env_vars if hasattr(self.config, "env_vars") else (self.config.get("env_vars", {}) if isinstance(self.config, dict) else {})
+            "env": env_vars,
         }
 
         if isinstance(service_config, dict):
@@ -461,8 +491,10 @@ class ComposeGenerator:
         try:
             jinja_template = jinja_env.from_string(template)
             result = jinja_template.render(**context)
-        except Exception as e:
-            # Fallback if Jinja parsing fails
+        except jinja2.TemplateError as e:
+            console.print(
+                f"[yellow]Warning: Template rendering failed for {service_id}: {e}[/yellow]"
+            )
             result = template
 
         # Apply legacy replacements for backward compatibility
@@ -497,8 +529,6 @@ class ComposeGenerator:
 
         # Handle generate:htpasswd
         if "${generate:htpasswd" in result:
-            import re
-
             # Pattern: ${generate:htpasswd:user_field:pass_field}
             pattern = r"\$\{generate:htpasswd:(\w+):(\w+)\}"
             matches = re.findall(pattern, result)
@@ -533,8 +563,6 @@ class ComposeGenerator:
 
         # Handle from_field:field_name
         if "${from_field:" in result:
-            import re
-
             pattern = r"\$\{from_field:(\w+)\}"
             matches = re.findall(pattern, result)
             for field_name in matches:
@@ -639,8 +667,9 @@ class ComposeGenerator:
             if compose_service:
                 self.services[service_id] = compose_service
 
+        # Note: the top-level "version" key is obsolete in the Compose
+        # Specification and triggers a warning in Docker Compose v2+.
         return {
-            "version": "3.8",
             "services": self.services,
             "networks": self.networks,
             "volumes": self.volumes,

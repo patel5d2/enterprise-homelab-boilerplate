@@ -86,11 +86,13 @@ class TestWizardOrchestrator:
 
     def _get_schemas(self):
         from labctl.core.services.schema import load_service_schemas
+
         schemas_dir = PROJECT_ROOT / "config" / "services-v2"
         return load_service_schemas(str(schemas_dir))
 
     def test_orchestrator_loads_schemas(self):
         from labctl.cli.wizard.orchestrator import WizardOrchestrator
+
         schemas = self._get_schemas()
         orch = WizardOrchestrator(schemas)
         assert len(orch.schemas) >= 16
@@ -98,6 +100,7 @@ class TestWizardOrchestrator:
     def test_non_interactive_wizard_returns_valid_config(self):
         """Non-interactive wizard returns a valid config dict with expected shape."""
         from labctl.cli.wizard.orchestrator import WizardOrchestrator
+
         schemas = self._get_schemas()
         orch = WizardOrchestrator(schemas)
 
@@ -125,6 +128,7 @@ class TestWizardOrchestrator:
     def test_non_interactive_generates_secrets(self):
         """Non-interactive mode auto-generates secrets for password fields."""
         from labctl.cli.wizard.orchestrator import WizardOrchestrator
+
         schemas = self._get_schemas()
         orch = WizardOrchestrator(schemas)
 
@@ -146,11 +150,13 @@ class TestWizardOrchestrator:
 
     def test_env_var_name_helper(self):
         from labctl.cli.wizard.orchestrator import _env_var_name
+
         assert _env_var_name("postgresql", "superuser_password") == "POSTGRESQL_SUPERUSER_PASSWORD"
         assert _env_var_name("redis", "password") == "REDIS_PASSWORD"
 
     def test_is_secret_field(self):
         from labctl.cli.wizard.orchestrator import _is_secret_field
+
         assert _is_secret_field("admin_password") is True
         assert _is_secret_field("cloudflare_api_token") is True
         assert _is_secret_field("database_port") is False

@@ -6,9 +6,10 @@ as well as management of environment variable files.
 """
 
 import base64
-import hashlib
+import os
 import re
 import secrets
+import stat
 import string
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
@@ -16,6 +17,9 @@ from typing import Any, Dict, List, Optional, Tuple
 from rich.console import Console
 
 console = Console()
+
+# Permissions for files containing secrets: read/write for owner only
+SECRET_FILE_MODE = stat.S_IRUSR | stat.S_IWUSR  # 0o600
 
 
 class SecretGenerationError(Exception):
@@ -119,34 +123,48 @@ def generate_htpasswd_hash(username: str, password: str) -> str:
     """
     Generate htpasswd-compatible hash for HTTP basic auth
 
+    Uses bcrypt, which is supported by Apache, nginx, Traefik, and Caddy.
+    Falls back to SHA-512 crypt on platforms where bcrypt is unavailable
+    (the crypt module was removed in Python 3.13). Never falls back to a
+    weak hash: if no strong algorithm is available, an error is raised.
+
     Args:
         username: Username
         password: Password to hash
 
     Returns:
         htpasswd format string (username:hash)
-    """
-    try:
-        import crypt
 
-        # Use SHA-512 based hash (most secure)
+    Raises:
+        SecretGenerationError: If no strong hashing algorithm is available
+    """
+    if not username or ":" in username:
+        raise SecretGenerationError("Username must be non-empty and must not contain ':'")
+
+    try:
+        import bcrypt
+
+        hashed = bcrypt.hashpw(password.encode("utf-8"), bcrypt.gensalt(rounds=12))
+        # Use the $2y$ prefix emitted by htpasswd -B for maximum compatibility;
+        # it is the same algorithm as $2b$.
+        return f"{username}:{hashed.decode('ascii').replace('$2b$', '$2y$', 1)}"
+    except ImportError:
+        pass
+
+    try:
+        import crypt  # Removed in Python 3.13; only reachable on older versions
+
         salt = secrets.token_hex(8)
         hashed = crypt.crypt(password, f"$6${salt}$")
-        return f"{username}:{hashed}"
+        if hashed and hashed.startswith("$6$"):
+            return f"{username}:{hashed}"
     except ImportError:
-        # Fallback to bcrypt-style hash using hashlib
-        try:
-            import bcrypt
+        pass
 
-            salt = bcrypt.gensalt()
-            hashed = bcrypt.hashpw(password.encode("utf-8"), salt)
-            return f"{username}:{{bcrypt}}{hashed.decode('ascii')}"
-        except ImportError:
-            # Final fallback to SHA256 (less secure but portable)
-            salt = secrets.token_hex(16)
-            hash_obj = hashlib.sha256(f"{salt}{password}".encode("utf-8"))
-            hashed = hash_obj.hexdigest()
-            return f"{username}:{{SHA256}}{salt}${hashed}"
+    raise SecretGenerationError(
+        "No strong password hashing algorithm available. "
+        "Install the 'bcrypt' package: pip install bcrypt"
+    )
 
 
 def validate_env_key(key: str) -> bool:
@@ -231,7 +249,12 @@ def write_env(
         # Ensure parent directory exists
         env_path.parent.mkdir(parents=True, exist_ok=True)
 
-        with open(env_path, "w", encoding="utf-8") as f:
+        # Create the file with owner-only permissions (0600) so secrets are
+        # never world-readable, even briefly. Also tightens pre-existing files.
+        fd = os.open(env_path, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, SECRET_FILE_MODE)
+        os.chmod(env_path, SECRET_FILE_MODE)
+
+        with os.fdopen(fd, "w", encoding="utf-8") as f:
             # Write header
             f.write("# Home Lab Environment Variables\n")
             f.write("# Generated automatically - do not edit manually\n")
@@ -394,8 +417,18 @@ def redact_secrets(data: Any, redaction_text: str = "●●●●●●●●") 
         return [redact_secrets(item, redaction_text) for item in data]
 
     elif isinstance(data, str):
-        # Check if the string itself looks like a secret
-        if len(data) > 16 and any(c in data for c in string.ascii_letters + string.digits):
+        # Only redact bare strings that look like high-entropy tokens:
+        # long, no whitespace, and a mix of upper/lower/digit characters.
+        # Ordinary values (domains, image names, descriptions) pass through.
+        if (
+            len(data) >= 24
+            and not any(c.isspace() for c in data)
+            and re.fullmatch(r"[A-Za-z0-9+/_=.-]+", data)
+            and any(c.isupper() for c in data)
+            and any(c.islower() for c in data)
+            and any(c.isdigit() for c in data)
+            and "." not in data  # domains/hostnames/filenames are not secrets
+        ):
             return redaction_text
         return data
 
@@ -457,8 +490,12 @@ def create_backup_env(env_path: Path) -> Optional[Path]:
         timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
         backup_path = env_path.with_suffix(f".bak.{timestamp}")
 
-        # Copy file content
-        with open(env_path, "r") as src, open(backup_path, "w") as dst:
+        # Copy file content with owner-only permissions (backups hold secrets too)
+        fd = os.open(backup_path, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, SECRET_FILE_MODE)
+        with (
+            open(env_path, "r", encoding="utf-8") as src,
+            os.fdopen(fd, "w", encoding="utf-8") as dst,
+        ):
             dst.write(src.read())
 
         console.print(f"[dim]Created backup: {backup_path}[/dim]")

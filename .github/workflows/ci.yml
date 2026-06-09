@@ -6,6 +6,10 @@ on:
   pull_request:
     branches: [main, develop]
 
+# Least-privilege token: jobs only need to read repository contents
+permissions:
+  contents: read
+
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
@@ -33,6 +37,28 @@ jobs:
       - name: flake8
         run: flake8 cli/ --max-line-length=100 --extend-ignore=E203,W503
 
+  # ── Security scanning ────────────────────────────────────────────────────────
+  security:
+    name: Security (bandit + pip-audit)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install dev dependencies
+        run: pip install -e ".[dev]"
+
+      - name: bandit (static security analysis)
+        run: bandit -r cli/ -c pyproject.toml
+
+      - name: pip-audit (known-vulnerability scan of dependencies)
+        run: pip-audit --skip-editable
+
   # ── Unit + integration tests ─────────────────────────────────────────────────
   test:
     name: pytest (${{ matrix.os }} / Python ${{ matrix.python }})
@@ -41,7 +67,7 @@ jobs:
       fail-fast: false
       matrix:
         os: [ubuntu-latest, macos-latest]
-        python: ["3.11", "3.12"]
+        python: ["3.11", "3.12", "3.13"]
     steps:
       - uses: actions/checkout@v4
 

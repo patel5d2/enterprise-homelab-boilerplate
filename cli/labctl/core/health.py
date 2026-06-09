@@ -12,10 +12,26 @@ from .exceptions import HomeLabError  # noqa: F401 — re-exported for callers
 
 
 class HealthChecker:
-    """Health checker for Home Lab services"""
+    """Health checker for Home Lab services
 
-    def __init__(self, config: Config):
+    TLS certificate verification is enabled by default. It is only relaxed
+    when the lab is explicitly configured to use staging certificates
+    (e.g. Let's Encrypt staging), which are not signed by a trusted CA.
+    """
+
+    def __init__(self, config: Config, verify_tls: bool = True):
         self.config = config
+
+        # Staging certificates (Let's Encrypt staging) are intentionally
+        # untrusted; only in that explicitly configured case do we relax
+        # verification.
+        staging = bool(getattr(getattr(config, "reverse_proxy", None), "staging", False))
+        self.verify_tls = verify_tls and not staging
+
+        if not self.verify_tls:
+            import urllib3
+
+            urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
     def check_all(self) -> Dict[str, Dict[str, Any]]:
         """Check health of all enabled services"""
@@ -40,70 +56,41 @@ class HealthChecker:
 
         return results
 
-    def check_traefik(self) -> Dict[str, Any]:
-        """Check Traefik health"""
+    def _check_https(
+        self, service: str, path: str, healthy_codes: tuple = (200,)
+    ) -> Dict[str, Any]:
+        """Check an HTTPS endpoint for a service subdomain"""
         try:
-            url = f"https://traefik.{self.config.core.domain}/api/rawdata"
-            response = requests.get(url, timeout=10, verify=False)
+            url = f"https://{service}.{self.config.core.domain}{path}"
+            response = requests.get(url, timeout=10, verify=self.verify_tls)
             return {
-                "healthy": response.status_code == 200,
+                "healthy": response.status_code in healthy_codes,
                 "status_code": response.status_code,
-                "service": "traefik",
+                "service": service,
             }
         except Exception as e:
-            return {"healthy": False, "error": str(e), "service": "traefik"}
+            return {"healthy": False, "error": str(e), "service": service}
+
+    def check_traefik(self) -> Dict[str, Any]:
+        """Check Traefik health"""
+        return self._check_https("traefik", "/api/rawdata")
 
     def check_prometheus(self) -> Dict[str, Any]:
         """Check Prometheus health"""
-        try:
-            url = f"https://prometheus.{self.config.core.domain}/-/healthy"
-            response = requests.get(url, timeout=10, verify=False)
-            return {
-                "healthy": response.status_code == 200,
-                "status_code": response.status_code,
-                "service": "prometheus",
-            }
-        except Exception as e:
-            return {"healthy": False, "error": str(e), "service": "prometheus"}
+        return self._check_https("prometheus", "/-/healthy")
 
     def check_grafana(self) -> Dict[str, Any]:
         """Check Grafana health"""
-        try:
-            url = f"https://grafana.{self.config.core.domain}/api/health"
-            response = requests.get(url, timeout=10, verify=False)
-            return {
-                "healthy": response.status_code == 200,
-                "status_code": response.status_code,
-                "service": "grafana",
-            }
-        except Exception as e:
-            return {"healthy": False, "error": str(e), "service": "grafana"}
+        return self._check_https("grafana", "/api/health")
 
     def check_gitlab(self) -> Dict[str, Any]:
         """Check GitLab health"""
-        try:
-            url = f"https://gitlab.{self.config.core.domain}/-/health"
-            response = requests.get(url, timeout=10, verify=False)
-            return {
-                "healthy": response.status_code == 200,
-                "status_code": response.status_code,
-                "service": "gitlab",
-            }
-        except Exception as e:
-            return {"healthy": False, "error": str(e), "service": "gitlab"}
+        return self._check_https("gitlab", "/-/health")
 
     def check_vault(self) -> Dict[str, Any]:
         """Check Vault health"""
-        try:
-            url = f"https://vault.{self.config.core.domain}/v1/sys/health"
-            response = requests.get(url, timeout=10, verify=False)
-            return {
-                "healthy": response.status_code in [200, 429],  # 429 is sealed but healthy
-                "status_code": response.status_code,
-                "service": "vault",
-            }
-        except Exception as e:
-            return {"healthy": False, "error": str(e), "service": "vault"}
+        # 429 means sealed but healthy
+        return self._check_https("vault", "/v1/sys/health", healthy_codes=(200, 429))
 
     def check_docker_service(self, service_name: str) -> Dict[str, Any]:
         """Check Docker service status"""

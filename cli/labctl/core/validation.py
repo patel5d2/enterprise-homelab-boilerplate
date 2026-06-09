@@ -451,17 +451,17 @@ class ConfigurationValidator:
         """Validate infrastructure and system requirements"""
         # Check if Docker is available (basic check)
         try:
-            import subprocess
+            import shutil
 
-            result = subprocess.run(["which", "docker"], capture_output=True, text=True)
-            if result.returncode != 0:
+            if shutil.which("docker") is None:
                 self.warnings.append(
                     ValidationWarning(
-                        "Docker not found in PATH. " "Ensure Docker is installed and running."
+                        "Docker not found in PATH. Ensure Docker is installed and running."
                     )
                 )
-        except Exception:
-            pass  # Skip if subprocess not available
+        # Availability probe only; never fatal
+        except Exception:  # nosec B110
+            pass
 
         # Storage path validation
         self._validate_storage_paths()

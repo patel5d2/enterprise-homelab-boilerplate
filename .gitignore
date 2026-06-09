@@ -46,16 +46,29 @@ venv.bak/
 # Docker
 .dockerignore
 
+# Test / coverage artifacts
+.coverage
+.coverage.*
+htmlcov/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+coverage.xml
+
 # Home Lab specific
 config.yaml
 config/*.yaml
+config/*.backup
 config/secrets/
 compose/
 data/
 logs/
 backups/
-.env.local
-.env.production
+
+# Environment files and their backups (contain secrets)
+.env.*
+!.env.template
+*.bak.*
 
 # SSL certificates (unless example)
 ssl/

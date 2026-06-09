@@ -47,7 +47,8 @@ def run(
         try:
             with open(config_path) as f:
                 existing_config = yaml.safe_load(f) or {}
-        except Exception:
+        # An unreadable config simply falls back to fresh defaults
+        except Exception:  # nosec B110
             pass
 
     # ── Handle already-existing config ────────────────────────────────────

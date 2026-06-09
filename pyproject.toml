@@ -20,6 +20,7 @@ classifiers = [
     "Programming Language :: Python :: 3",
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
     "Topic :: System :: Systems Administration",
     "Topic :: Software Development :: Libraries :: Python Modules",
 ]
@@ -36,6 +37,7 @@ dependencies = [
     "python-dotenv>=1.0.0",
     "cryptography>=41.0.0",
     "jsonschema>=4.17.0",
+    "bcrypt>=4.0.0",
 ]
 
 [project.optional-dependencies]
@@ -47,6 +49,8 @@ dev = [
     "flake8>=6.0.0",
     "mypy>=1.0.0",
     "pre-commit>=3.0.0",
+    "bandit>=1.7.5",
+    "pip-audit>=2.6.0",
 ]
 
 [project.urls]
@@ -80,3 +84,11 @@ warn_return_any = true
 warn_unused_configs = true
 disallow_untyped_defs = true
 disallow_incomplete_defs = true
+
+[tool.bandit]
+exclude_dirs = ["tests", "venv", ".venv"]
+# B404/B603/B607: this CLI wraps docker/docker-compose via subprocess with
+# argument lists (never shell=True); these informational findings are accepted.
+# B105: flags string literals such as "password" used as secret *type names*
+# and enum values — no secret values are hardcoded in the codebase.
+skips = ["B404", "B603", "B607", "B105"]
